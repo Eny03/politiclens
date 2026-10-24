@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.models import PoliticalProposal
 from app.schemas import ProposalExtractionSchema
 from app.ai.embeddings import cosine_similarity
+from app.ai.deduplication_engine import is_duplicate_proposal, POLICY_CLUSTERS
 
 # Highly specific policy sub-measure clusters: only merges if the EXACT same reform is referenced
 CORE_POLICY_TOPIC_GROUPS = [
@@ -75,35 +76,28 @@ def find_matching_existing_proposal(
     if not candidates:
         return None
 
-    new_lower = dichiarazione_sintesi.lower()
-
-    # 1. Match by Core Policy Topic Clusters
+    # Unified Anti-Duplicate and Policy Evolution Check
     for cand in candidates:
-        cand_lower = cand.dichiarazione_sintesi.lower()
-        for cluster in CORE_POLICY_TOPIC_GROUPS:
-            new_has_cluster = any(term in new_lower for term in cluster)
-            cand_has_cluster = any(term in cand_lower for term in cluster)
-            if new_has_cluster and cand_has_cluster:
-                # Matching core cluster found for the same party and topic -> update existing proposal
-                return cand
-
-    # 2. Match by Vector Embedding Cosine Similarity
-    if emb_list:
-        best_candidate = None
-        best_sim = 0.0
-        for cand in candidates:
-            if cand.embedding:
-                try:
-                    cand_vec = json.loads(cand.embedding)
-                    sim = cosine_similarity(emb_list, cand_vec)
-                    if sim > best_sim:
-                        best_sim = sim
-                        best_candidate = cand
-                except Exception:
-                    continue
-
-        if best_candidate and best_sim >= 0.82:
-            return best_candidate
+        cand_emb = None
+        if cand.embedding:
+            try:
+                cand_emb = json.loads(cand.embedding)
+            except Exception:
+                pass
+                
+        is_dup, reason = is_duplicate_proposal(
+            party_a=partito,
+            topic_a=macro_argomento,
+            text_a=dichiarazione_sintesi,
+            party_b=cand.partito,
+            topic_b=cand.macro_argomento,
+            text_b=cand.dichiarazione_sintesi,
+            emb_a=emb_list,
+            emb_b=cand_emb
+        )
+        if is_dup:
+            print(f"[PolicyMerger] Duplicate detected ({reason}): linking to existing id={cand.id}")
+            return cand
 
     return None
 

@@ -18,6 +18,7 @@ from app.data.historical_proposals import HISTORICAL_PROPOSALS_SEED
 from app.ingestion.text_extractor import compute_content_hash
 from app.ai.embeddings import get_text_embedding
 from app.ai.ollama_client import ollama_client
+from app.ai.deduplication_engine import is_duplicate_proposal
 from app.ingestion.scheduler import start_scheduler, stop_scheduler
 
 from app.api.parties import router as parties_router
@@ -101,24 +102,22 @@ def seed_database_if_empty():
         # Deduplicate all seed proposals before inserting (strict substantive matching)
         deduped_seeds = []
         for prop in (PROPOSALS_SEED + HISTORICAL_PROPOSALS_SEED):
-            p_text = prop["dichiarazione_sintesi"].lower()
-            p_words = {w for w in p_text.replace(',', ' ').replace('.', ' ').replace(':', ' ').replace("'", ' ').split() if w not in stopwords and len(w) > 3}
-            
             is_dup = False
             for existing_idx, existing_seed in enumerate(deduped_seeds):
-                if existing_seed["partito"] == prop["partito"] and existing_seed["macro_argomento"] == prop["macro_argomento"]:
-                    e_text = existing_seed["dichiarazione_sintesi"].lower()
-                    e_words = {w for w in e_text.replace(',', ' ').replace('.', ' ').replace(':', ' ').replace("'", ' ').split() if w not in stopwords and len(w) > 3}
-                    common = p_words & e_words
-                    overlap = len(common) / max(len(p_words), len(e_words)) if max(len(p_words), len(e_words)) > 0 else 0
-                    ratio = SequenceMatcher(None, p_text, e_text).ratio()
-                    
-                    if (len(common) >= 3 and (overlap >= 0.50 or ratio >= 0.60)):
-                        is_dup = True
-                        # If current prop is more detailed or formal, replace the existing one
-                        if len(prop["dichiarazione_sintesi"]) > len(existing_seed["dichiarazione_sintesi"]):
-                            deduped_seeds[existing_idx] = prop
-                        break
+                dup_matched, reason = is_duplicate_proposal(
+                    party_a=prop["partito"],
+                    topic_a=prop["macro_argomento"],
+                    text_a=prop["dichiarazione_sintesi"],
+                    party_b=existing_seed["partito"],
+                    topic_b=existing_seed["macro_argomento"],
+                    text_b=existing_seed["dichiarazione_sintesi"]
+                )
+                if dup_matched:
+                    is_dup = True
+                    # If current prop is more detailed or formal, replace the existing one
+                    if len(prop["dichiarazione_sintesi"]) > len(existing_seed["dichiarazione_sintesi"]):
+                        deduped_seeds[existing_idx] = prop
+                    break
             if not is_dup:
                 deduped_seeds.append(prop)
 
@@ -183,26 +182,35 @@ def seed_database_if_empty():
         db_to_delete = []
         for p in existing_db_props:
             grp_key = (p.partito.strip().lower(), p.macro_argomento.strip().lower())
-            clean_text = p.dichiarazione_sintesi.lower().replace(',', ' ').replace('.', ' ').replace(':', ' ').replace('(', ' ').replace(')', ' ').replace("'", ' ').replace(';', ' ')
-            p_words = {w for w in clean_text.split() if w not in stopwords and len(w) > 3}
             if grp_key not in by_grp:
-                by_grp[grp_key] = [(p, p_words)]
+                by_grp[grp_key] = [p]
             else:
                 dup_found = False
-                for prev_p, prev_words in by_grp[grp_key]:
-                    common = p_words & prev_words
-                    overlap = len(common) / max(len(p_words), len(prev_words)) if max(len(p_words), len(prev_words)) > 0 else 0
-                    ratio = SequenceMatcher(None, p.dichiarazione_sintesi.lower(), prev_p.dichiarazione_sintesi.lower()).ratio()
-                    if (len(common) >= 3 and (overlap >= 0.50 or ratio >= 0.60)):
+                for prev_p in by_grp[grp_key]:
+                    p_emb = json.loads(p.embedding) if p.embedding else None
+                    prev_emb = json.loads(prev_p.embedding) if prev_p.embedding else None
+                    dup_matched, reason = is_duplicate_proposal(
+                        party_a=p.partito,
+                        topic_a=p.macro_argomento,
+                        text_a=p.dichiarazione_sintesi,
+                        party_b=prev_p.partito,
+                        topic_b=prev_p.macro_argomento,
+                        text_b=prev_p.dichiarazione_sintesi,
+                        emb_a=p_emb,
+                        emb_b=prev_emb
+                    )
+                    if dup_matched:
                         dup_found = True
                         # Keep the longer, more descriptive one
                         if len(p.dichiarazione_sintesi) > len(prev_p.dichiarazione_sintesi):
                             db_to_delete.append(prev_p)
+                            by_grp[grp_key].remove(prev_p)
+                            by_grp[grp_key].append(p)
                         else:
                             db_to_delete.append(p)
                         break
                 if not dup_found:
-                    by_grp[grp_key].append((p, p_words))
+                    by_grp[grp_key].append(p)
 
         for dp in db_to_delete:
             try:

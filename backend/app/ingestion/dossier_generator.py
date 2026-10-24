@@ -423,9 +423,15 @@ def generate_party_dossier(party: PoliticalParty, db: Session) -> Dict[str, Any]
     pending_coverage = sum(1 for p in proposals if p.fact_check_status == "In attesa di copertura")
     exaggerated_count = sum(1 for p in proposals if p.fact_check_status in ["Esagerato", "Fake / Infondato"])
 
-    feasibility_score = 80
-    if total_props > 0:
-        feasibility_score = round(((verified_count * 100) + (pending_coverage * 50)) / total_props)
+    truth_weights_dossier = {
+        "Verificato": 100.0,
+        "In attesa di copertura": 60.0,
+        "Esagerato": 30.0,
+        "Inattuabile": 0.0,
+        "Fake / Infondato": 0.0,
+        "Non verificabile": 20.0
+    }
+    feasibility_score = round(sum(truth_weights_dossier.get(p.fact_check_status, 50.0) for p in proposals) / total_props) if total_props > 0 else 80
 
     # Fetch Specialized Strategic Knowledge Profile for this party
     profile = PARTY_PROFILES_KNOWLEDGE_BASE.get(party.name, None)
@@ -594,11 +600,32 @@ def update_all_party_dossiers(db: Session):
                 (PoliticalProposal.party_id == party.id) | (PoliticalProposal.partito.ilike(f"%{party.name}%"))
             ).all()
             if proposals:
-                v_cnt = sum(1 for p in proposals if p.fact_check_status == "Verificato")
-                p_cnt = sum(1 for p in proposals if p.fact_check_status == "In attesa di copertura")
-                q_cnt = sum(1 for p in proposals if p.costo_stimato and p.costo_stimato != "Non quantificato")
-                party.truthfulness_score = round(((v_cnt * 100) + (p_cnt * 50)) / len(proposals), 1)
-                party.financial_reliability_score = round(max(60.0, (q_cnt / len(proposals)) * 100), 1)
+                truth_weights = {
+                    "Verificato": 100.0,
+                    "In attesa di copertura": 60.0,
+                    "Esagerato": 30.0,
+                    "Inattuabile": 0.0,
+                    "Fake / Infondato": 0.0,
+                    "Non verificabile": 20.0
+                }
+                party.truthfulness_score = round(sum(truth_weights.get(p.fact_check_status, 50.0) for p in proposals) / len(proposals), 1)
+
+                cov_score = 0.0
+                for p in proposals:
+                    cop = (p.coperture_dichiarate or "").strip().lower()
+                    cost = (p.costo_stimato or "").strip().lower()
+                    st = p.fact_check_status or ""
+                    if any(w in cost for w in ["invarianza", "saldo neutro", "costi nulli", "zero costi", "costi operativi nulli"]):
+                        cov_score += 1.0
+                    elif st == "Inattuabile":
+                        cov_score += 0.0
+                    elif not cop or any(w in cop for w in ["non specificat", "in attesa", "da definire", "non disponibile", "nessuna copertura", "non indicat"]):
+                        cov_score += 0.0
+                    elif st == "In attesa di copertura":
+                        cov_score += 0.5
+                    else:
+                        cov_score += 1.0
+                party.financial_reliability_score = round((cov_score / len(proposals)) * 100, 1)
         except Exception as e:
             print(f"[DossierGenerator] Error updating dossier for {party.name}: {e}")
     db.commit()

@@ -41,28 +41,35 @@ def get_overview_stats(db: Session = Depends(get_db)):
 
     all_proposals = db.query(PoliticalProposal).all()
 
-    # 1. Coperture Economiche: % di proposte in cui è esplicitata e indicata la fonte di copertura finanziaria o l'invarianza
-    with_coverage_count = 0
-    for p in all_proposals:
-        cop = (p.coperture_dichiarate or "").strip().lower()
-        if cop and not any(w in cop for w in ["non specificat", "in attesa", "da definire", "non disponibile", "nessuna copertura", "non indicat"]):
-            with_coverage_count += 1
-            
-    quantified_percentage = round((with_coverage_count / total_proposals * 100), 1) if total_proposals > 0 else 0.0
-
-    # 2. Indice di Veridicità e Accuratezza Fattuale (Fact-checking ponderato):
-    # - Verificato: 100% (aderente ai dati ufficiali)
-    # - In attesa di copertura: 75% (proposta reale di policy, in attesa di definizione in manovra di bilancio)
-    # - Esagerato: 30% (dati o promesse gonfiate rispetto ai benchmark ISTAT)
-    # - Inattuabile: 10% (contrasto netto con vincoli strutturali o matematici)
-    # - Fake / Infondato: 0%
+    # 1. Coperture Economiche: % ponderata di proposte con copertura finanziaria asseverata o ad invarianza
     truth_weights = {
         "Verificato": 100.0,
-        "In attesa di copertura": 75.0,
+        "In attesa di copertura": 60.0,
         "Esagerato": 30.0,
-        "Inattuabile": 10.0,
-        "Fake / Infondato": 0.0
+        "Inattuabile": 0.0,
+        "Fake / Infondato": 0.0,
+        "Non verificabile": 20.0
     }
+
+    cov_sum = 0.0
+    for p in all_proposals:
+        cop = (p.coperture_dichiarate or "").strip().lower()
+        cost = (p.costo_stimato or "").strip().lower()
+        st = p.fact_check_status or ""
+        if any(w in cost for w in ["invarianza", "saldo neutro", "costi nulli", "zero costi", "costi operativi nulli"]):
+            cov_sum += 1.0
+        elif st == "Inattuabile":
+            cov_sum += 0.0
+        elif not cop or any(w in cop for w in ["non specificat", "in attesa", "da definire", "non disponibile", "nessuna copertura", "non indicat"]):
+            cov_sum += 0.0
+        elif st == "In attesa di copertura":
+            cov_sum += 0.5
+        else:
+            cov_sum += 1.0
+
+    quantified_percentage = round((cov_sum / total_proposals * 100), 1) if total_proposals > 0 else 0.0
+
+    # 2. Indice di Veridicità e Accuratezza Fattuale (Fact-checking ponderato)
     truth_sum = sum(truth_weights.get(p.fact_check_status, 50.0) for p in all_proposals)
     avg_truthfulness = round(truth_sum / total_proposals, 1) if total_proposals > 0 else 0.0
 
@@ -76,9 +83,27 @@ def get_overview_stats(db: Session = Depends(get_db)):
             (PoliticalProposal.party_id == p.id) | (PoliticalProposal.partito.ilike(f"%{p.name}%"))
         ).all()
         p_total = len(p_props)
-        p_verified = sum(1 for pr in p_props if pr.fact_check_status == "Verificato")
-        p_pending = sum(1 for pr in p_props if pr.fact_check_status == "In attesa di copertura")
-        p_truth = round(((p_verified * 100) + (p_pending * 50)) / p_total, 1) if p_total > 0 else (p.truthfulness_score or 80.0)
+        if p_total > 0:
+            p_truth = round(sum(truth_weights.get(pr.fact_check_status, 50.0) for pr in p_props) / p_total, 1)
+            p_cov_sum = 0.0
+            for pr in p_props:
+                cop = (pr.coperture_dichiarate or "").strip().lower()
+                cost = (pr.costo_stimato or "").strip().lower()
+                st = pr.fact_check_status or ""
+                if any(w in cost for w in ["invarianza", "saldo neutro", "costi nulli", "zero costi", "costi operativi nulli"]):
+                    p_cov_sum += 1.0
+                elif st == "Inattuabile":
+                    p_cov_sum += 0.0
+                elif not cop or any(w in cop for w in ["non specificat", "in attesa", "da definire", "non disponibile", "nessuna copertura", "non indicat"]):
+                    p_cov_sum += 0.0
+                elif st == "In attesa di copertura":
+                    p_cov_sum += 0.5
+                else:
+                    p_cov_sum += 1.0
+            p_fin = round((p_cov_sum / p_total) * 100, 1)
+        else:
+            p_truth = p.truthfulness_score or 75.0
+            p_fin = p.financial_reliability_score or 70.0
         
         c_name = p.coalition
         if "Centrodestra" in c_name:
@@ -103,7 +128,7 @@ def get_overview_stats(db: Session = Depends(get_db)):
             "poll_percentage": p.poll_percentage or 0.0,
             "poll_trend": p.poll_trend or "stabile",
             "truthfulness_score": p_truth,
-            "financial_reliability_score": p.financial_reliability_score or 80.0,
+            "financial_reliability_score": p_fin,
             "proposals_count": p_total
         })
 

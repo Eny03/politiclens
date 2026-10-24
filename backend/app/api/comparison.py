@@ -78,9 +78,9 @@ def get_comparison_matrix(db: Session = Depends(get_db)):
                 if any(p.tipo_azione == "Opposizione" for p in p_list):
                     stance = "Contrario / Opposizione"
                 elif any(p.tipo_azione == "Proposta di legge" for p in p_list):
-                    stance = f"{len(p_list)} proposte / Riforme"
+                    stance = "1 proposta / Riforma" if len(p_list) == 1 else f"{len(p_list)} proposte / Riforme"
                 else:
-                    stance = f"{len(p_list)} posizioni censite"
+                    stance = "1 posizione censita" if len(p_list) == 1 else f"{len(p_list)} posizioni censite"
                     
             details = [PoliticalProposalDetail.model_validate(p) for p in p_list]
             for d in details:
@@ -107,15 +107,15 @@ def get_comparison_matrix(db: Session = Depends(get_db)):
     )
 
 def _parse_cost_in_billions(cost_str: str) -> float:
-    """Extracts numeric billions from strings like '~12.5 Mld €', '3.5 Mld €', etc."""
+    """Extracts numeric billions from strings like '~12.5 Mld €', '5.5 miliardi €', '120 milioni €', etc."""
     if not cost_str or "non quantificato" in cost_str.lower() or "invarianza" in cost_str.lower():
         return 0.0
-    m = re.search(r"(\d+(?:[.,]\d+)?)\s*mld", cost_str, re.I)
-    if m:
-        return float(m.group(1).replace(",", "."))
-    m2 = re.search(r"(\d+(?:[.,]\d+)?)\s*mln", cost_str, re.I)
-    if m2:
-        return float(m2.group(1).replace(",", ".")) / 1000.0
+    m_mld = re.search(r"(\d+(?:[.,]\d+)?)\s*(?:mld|miliard)", cost_str, re.I)
+    if m_mld:
+        return float(m_mld.group(1).replace(",", "."))
+    m_mln = re.search(r"(\d+(?:[.,]\d+)?)\s*(?:mln|milion)", cost_str, re.I)
+    if m_mln:
+        return float(m_mln.group(1).replace(",", ".")) / 1000.0
     return 0.0
 
 async def _compute_head_to_head_synthesis(
@@ -187,8 +187,12 @@ async def _compute_head_to_head_synthesis(
     if cost2_total > 0 and cost1_total > 0:
         ratio_val = round(cost1_total / cost2_total, 2)
         cost_ratio_str = f"{party1_name} quota ~{cost1_total:.1f} Mld € contro ~{cost2_total:.1f} Mld € di {party2_name} (rapporto {ratio_val}:1)"
+    elif cost1_total > 0:
+        cost_ratio_str = f"{party1_name}: ~{cost1_total:.1f} Mld € stimati ({quantified1} misure) | {party2_name}: ~{cost2_total:.1f} Mld € (in attesa di quantificazione MEF)"
+    elif cost2_total > 0:
+        cost_ratio_str = f"{party1_name}: ~{cost1_total:.1f} Mld € (in attesa di quantificazione MEF) | {party2_name}: ~{cost2_total:.1f} Mld € stimati ({quantified2} misure)"
     else:
-        cost_ratio_str = f"{party1_name}: ~{cost1_total:.1f} Mld € stimati ({quantified1} misure quantificate) | {party2_name}: ~{cost2_total:.1f} Mld € stimati ({quantified2} misure quantificate)"
+        cost_ratio_str = f"Misure ad invarianza finanziaria o con oneri programmatici in attesa di relazione tecnica MEF ({quantified1} vs {quantified2} atti)"
 
     exec_summary = (
         f"L'analisi comparativa tra {party1_name} e {party2_name} "

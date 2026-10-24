@@ -144,19 +144,6 @@ export default function AuditPage() {
             Tracciamento trasparente e cronologico di ogni modifica: rilevazioni demoscopiche periodiche dei sondaggi, verifiche di sostenibilità economica e sintesi di nuovi atti e dichiarazioni in tempo reale.
           </p>
         </div>
-
-        {/* Polling Agent trigger button */}
-        <div className="flex items-center gap-2 shrink-0">
-          <button
-            onClick={handleRunPollSweep}
-            disabled={updatingPolls}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition-colors disabled:opacity-50"
-            title="Avvia sincronizzazione demoscopica con il PollTrackerAgent"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${updatingPolls ? "animate-spin" : ""}`} />
-            <span>{updatingPolls ? "Scansione Sondaggi..." : "Aggiorna Sondaggi AI"}</span>
-          </button>
-        </div>
       </div>
 
       {actionMessage && (

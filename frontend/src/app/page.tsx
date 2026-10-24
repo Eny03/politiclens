@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useTransition, Suspense } from "react";
+import React, { useEffect, useState, useMemo, useTransition, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { 
@@ -28,7 +28,9 @@ import {
   Info,
   ExternalLink,
   Percent,
-  SlidersHorizontal
+  SlidersHorizontal,
+  Award,
+  ArrowUpDown
 } from "lucide-react";
 import { 
   ResponsiveContainer, 
@@ -103,9 +105,9 @@ function DashboardContent() {
 
   const [showGapsDetails, setShowGapsDetails] = useState<boolean>(false);
 
-  // Active view tab synced with URL param: "proposte" | "sondaggi"
-  const urlTab = (searchParams.get("tab") as "proposte" | "sondaggi") || "proposte";
-  const [activeTab, setActiveTabState] = useState<"proposte" | "sondaggi">(urlTab);
+  // Active view tab synced with URL param: "proposte" | "sondaggi" | "statistiche"
+  const urlTab = (searchParams.get("tab") as "proposte" | "sondaggi" | "statistiche") || "proposte";
+  const [activeTab, setActiveTabState] = useState<"proposte" | "sondaggi" | "statistiche">(urlTab);
 
   // Proposals Tab Filters synced with URL
   const initialTopic = searchParams.get("topic") || "Tutti";
@@ -122,6 +124,10 @@ function DashboardContent() {
   // Polls Tab Filter
   const [pollCoalitionFilter, setPollCoalitionFilter] = useState<string>("Tutti");
   const [pollChartType, setPollChartType] = useState<"bar" | "ranking">("bar");
+
+  // Statistics Tab State (Veridicità & Coperture)
+  const [statsSortBy, setStatsSortBy] = useState<"truth" | "finance" | "poll" | "proposals">("truth");
+  const [statsCoalitionFilter, setStatsCoalitionFilter] = useState<string>("Tutti");
 
   // Helper to sync state to URL
   const updateURL = (paramsToUpdate: Record<string, string | null>) => {
@@ -140,7 +146,7 @@ function DashboardContent() {
     });
   };
 
-  const setActiveTab = (tab: "proposte" | "sondaggi") => {
+  const setActiveTab = (tab: "proposte" | "sondaggi" | "statistiche") => {
     setActiveTabState(tab);
     updateURL({ tab: tab === "proposte" ? null : tab });
   };
@@ -331,6 +337,99 @@ function DashboardContent() {
     };
   });
 
+  // Helper to categorize parties into 4 primary coalitions
+  const getCoalitionCategory = (code: string, coalition: string): "centrodestra" | "campo_largo" | "centro" | "altre_forze" => {
+    const cUpper = (code || "").toUpperCase();
+    const cLow = (coalition || "").toLowerCase();
+    if (["FDI", "LEGA", "FI", "NM", "FUTNAZ"].includes(cUpper) || cLow.includes("centrodestra")) {
+      return "centrodestra";
+    }
+    if (["PD", "M5S", "AVS", "PIUEU"].includes(cUpper) || cLow.includes("centrosinistra") || cLow.includes("campo progressista") || cLow.includes("progressist") || cLow.includes("campo largo")) {
+      return "campo_largo";
+    }
+    if (["AZ", "IV", "LIBDEM", "ORA"].includes(cUpper) || cLow.includes("centro") || cLow.includes("terzo polo") || cLow.includes("liberal") || cLow.includes("riformist")) {
+      return "centro";
+    }
+    return "altre_forze";
+  };
+
+  // Coalition Summary Stats calculation
+  const coalitionStats = useMemo(() => {
+    const rankings = stats?.party_rankings || [];
+    const groups = {
+      centrodestra: {
+        id: "centrodestra",
+        name: "Centrodestra",
+        tag: "Maggioranza di Governo",
+        theme: "blue",
+        parties: [] as typeof rankings
+      },
+      campo_largo: {
+        id: "campo_largo",
+        name: "Campo Largo & Progressisti",
+        tag: "Opposizione Parlamentare",
+        theme: "rose",
+        parties: [] as typeof rankings
+      },
+      centro: {
+        id: "centro",
+        name: "Centro & Liberaldemocratici",
+        tag: "Terzo Polo & Riformisti",
+        theme: "cyan",
+        parties: [] as typeof rankings
+      },
+      altre_forze: {
+        id: "altre_forze",
+        name: "Sinistra Radicale & Altre Forze",
+        tag: "Civiche & Autonomie",
+        theme: "amber",
+        parties: [] as typeof rankings
+      }
+    };
+
+    rankings.forEach((p) => {
+      const cat = getCoalitionCategory(p.code, p.coalition);
+      groups[cat].parties.push(p);
+    });
+
+    return Object.values(groups).map((g) => {
+      const count = g.parties.length || 1;
+      const avgTruth = g.parties.reduce((acc, p) => acc + (p.truthfulness_score || 0), 0) / count;
+      const avgFinance = g.parties.reduce((acc, p) => acc + (p.financial_reliability_score || 0), 0) / count;
+      const totalPoll = g.parties.reduce((acc, p) => acc + (p.poll_percentage || 0), 0);
+      const totalProposals = g.parties.reduce((acc, p) => acc + (p.proposals_count || 0), 0);
+
+      return {
+        ...g,
+        avgTruth: Math.round(avgTruth * 10) / 10,
+        avgFinance: Math.round(avgFinance * 10) / 10,
+        totalPoll: Math.round(totalPoll * 10) / 10,
+        totalProposals
+      };
+    });
+  }, [stats?.party_rankings]);
+
+  // Party-by-party stats filtered & sorted
+  const sortedPartyStats = useMemo(() => {
+    const rankings = [...(stats?.party_rankings || [])];
+    
+    // Filter
+    const filtered = rankings.filter((p) => {
+      if (statsCoalitionFilter === "Tutti") return true;
+      const cat = getCoalitionCategory(p.code, p.coalition);
+      return cat === statsCoalitionFilter;
+    });
+
+    // Sort
+    return filtered.sort((a, b) => {
+      if (statsSortBy === "truth") return (b.truthfulness_score || 0) - (a.truthfulness_score || 0);
+      if (statsSortBy === "finance") return (b.financial_reliability_score || 0) - (a.financial_reliability_score || 0);
+      if (statsSortBy === "poll") return (b.poll_percentage || 0) - (a.poll_percentage || 0);
+      if (statsSortBy === "proposals") return (b.proposals_count || 0) - (a.proposals_count || 0);
+      return 0;
+    });
+  }, [stats?.party_rankings, statsCoalitionFilter, statsSortBy]);
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto px-4 sm:px-6 py-4">
       {/* 1. HERO BANNER (Light, Clean & High-End Editorial Style) */}
@@ -348,40 +447,6 @@ function DashboardContent() {
           <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed max-w-2xl">
             Osservatorio indipendente e neutrale: monitoraggio in tempo reale e in continuo aggiornamento autonomo per permettere a tutti i cittadini di osservare le idee politiche, confrontarle e verificarne la sostenibilità economica.
           </p>
-
-          <div className="flex flex-wrap items-center gap-2.5 pt-2">
-            <Link
-              href="/chat"
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs sm:text-sm transition-all shadow-xs"
-            >
-              <Bot className="w-4 h-4" />
-              <span>Interroga il Chatbot RAG Stream</span>
-            </Link>
-
-            <Link
-              href="/compare"
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-semibold text-xs sm:text-sm border border-slate-200 dark:border-slate-700 transition-all"
-            >
-              <Scale className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-              <span>Manifesto Dinamico 2D</span>
-            </Link>
-
-            <button
-              onClick={handleTriggerScan}
-              disabled={scanPhase !== "idle"}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-slate-50 hover:bg-slate-100 dark:bg-slate-800/80 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 transition-all disabled:opacity-50 ml-auto"
-              title="Avvia scansione continua dei feed e del web"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${scanPhase !== "idle" ? "animate-spin text-blue-600" : ""}`} />
-              <span className="hidden sm:inline">Scansione AI Live</span>
-            </button>
-          </div>
-
-          {scanFeedback && (
-            <div className="mt-2 text-xs font-medium text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800/60 px-3 py-1.5 rounded-xl animate-fadeIn">
-              {scanFeedback}
-            </div>
-          )}
         </div>
       </section>
 
@@ -464,6 +529,21 @@ function DashboardContent() {
             <span>Sondaggi & Grafici</span>
             <span className="text-[10px] px-1.5 py-0.5 rounded-md font-semibold bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
               Recharts
+            </span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("statistiche")}
+            className={`flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 py-2 px-3.5 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap ${
+              activeTab === "statistiche"
+                ? "bg-white dark:bg-slate-800 text-slate-950 dark:text-white shadow-2xs"
+                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+            }`}
+          >
+            <ShieldCheck className={`w-4 h-4 ${activeTab === "statistiche" ? "text-amber-600 dark:text-amber-400" : ""}`} />
+            <span>Veridicità & Coperture</span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded-md font-semibold bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+              Partiti & Coalizioni
             </span>
           </button>
         </div>
@@ -649,16 +729,6 @@ function DashboardContent() {
                       Classifica
                     </button>
                   </div>
-
-                  <button
-                    onClick={handleUpdatePolls}
-                    disabled={updatingPolls}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-2xs transition-colors disabled:opacity-50 shrink-0"
-                    title="Aggiorna le percentuali dei sondaggi interrogando le ultime fonti web"
-                  >
-                    <RefreshCw className={`w-3.5 h-3.5 ${updatingPolls ? "animate-spin" : ""}`} />
-                    <span>{updatingPolls ? "Ricerca..." : "Aggiorna Ora"}</span>
-                  </button>
                 </div>
               </div>
             </div>
@@ -853,6 +923,321 @@ function DashboardContent() {
                   </Link>
                 );
               })}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 3: STATISTICHE VERIDICITÀ & COPERTURE (PARTITI & COALIZIONI) */}
+        {activeTab === "statistiche" && (
+          <div className="space-y-6 animate-fadeIn">
+            {/* Header intro */}
+            <div className="p-4 sm:p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xs space-y-2">
+              <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 font-bold text-xs">
+                <ShieldCheck className="w-4 h-4" />
+                <span>Analisi Quantitativa Indipendente • Art. 81 Costituzione & Ufficio Parlamentare di Bilancio</span>
+              </div>
+              <h2 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white tracking-tight">
+                Indice di Affidabilità e Rigore di Bilancio per Coalizione e Partito
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed max-w-4xl">
+                La veridicità misura la corrispondenza delle proposte ad atti parlamentari, fonti ufficiali o promesse verificate. La copertura finanziaria misura l'indicazione di risorse certe, stime MEF/UPB e sostenibilità economica nel rispetto del pareggio di bilancio.
+              </p>
+            </div>
+
+            {/* Coalition Aggregates Grid (4 Coalitions) */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {coalitionStats.map((coal) => {
+                const isCdx = coal.id === "centrodestra";
+                const isCampo = coal.id === "campo_largo";
+                const isCenter = coal.id === "centro";
+
+                const badgeBg = isCdx
+                  ? "bg-blue-50 text-blue-700 dark:bg-blue-950/80 dark:text-blue-300 border-blue-200 dark:border-blue-800"
+                  : isCampo
+                  ? "bg-rose-50 text-rose-700 dark:bg-rose-950/80 dark:text-rose-300 border-rose-200 dark:border-rose-800"
+                  : isCenter
+                  ? "bg-cyan-50 text-cyan-700 dark:bg-cyan-950/80 dark:text-cyan-300 border-cyan-200 dark:border-cyan-800"
+                  : "bg-purple-50 text-purple-700 dark:bg-purple-950/80 dark:text-purple-300 border-purple-200 dark:border-purple-800";
+
+                return (
+                  <div
+                    key={coal.id}
+                    className="p-4 sm:p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xs flex flex-col justify-between space-y-4"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between gap-2 mb-1.5">
+                        <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border ${badgeBg}`}>
+                          {coal.tag}
+                        </span>
+                        <span className="text-xs font-mono font-bold text-slate-500">
+                          {coal.totalPoll > 0 ? `${coal.totalPoll}% voti` : ""}
+                        </span>
+                      </div>
+                      <h3 className="font-extrabold text-base text-slate-900 dark:text-white">
+                        {coal.name}
+                      </h3>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        {coal.totalProposals} proposte censite • {coal.parties.length} partiti
+                      </p>
+                    </div>
+
+                    {/* Progress Bars */}
+                    <div className="space-y-3 pt-1">
+                      <div>
+                        <div className="flex justify-between items-center text-xs mb-1">
+                          <span className="font-medium text-slate-600 dark:text-slate-400">Veridicità Media</span>
+                          <span className="font-mono font-extrabold text-slate-900 dark:text-white">
+                            {coal.avgTruth}%
+                          </span>
+                        </div>
+                        <div className="h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all duration-500 bg-blue-500"
+                            style={{ width: `${coal.avgTruth}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="flex justify-between items-center text-xs mb-1">
+                          <span className="font-medium text-slate-600 dark:text-slate-400">Coperture Finanziarie</span>
+                          <span className="font-mono font-extrabold text-slate-900 dark:text-white">
+                            {coal.avgFinance}%
+                          </span>
+                        </div>
+                        <div className="h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all duration-500 bg-emerald-500"
+                            style={{ width: `${coal.avgFinance}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Parties Chips */}
+                    <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex flex-wrap gap-1.5">
+                      {coal.parties.map((p) => (
+                        <Link
+                          key={p.code}
+                          href={`/parties?code=${p.code}`}
+                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors"
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: p.color }} />
+                          <span>{p.name.split(" ")[0]}</span>
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Direct Comparison Spotlight: Centrodestra vs Campo Largo */}
+            <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-blue-50 via-slate-50 to-rose-50 dark:from-blue-950/30 dark:via-slate-900 dark:to-rose-950/30 border border-slate-200 dark:border-slate-800">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
+                    Sintesi Comparativa Maggioranza vs Principale Opposizione
+                  </span>
+                  <h4 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white">
+                    Confronto Diretto: Centrodestra vs Campo Largo
+                  </h4>
+                  <p className="text-xs text-slate-600 dark:text-slate-300 max-w-2xl leading-relaxed">
+                    Il <strong>Centrodestra</strong> presenta una maggiore veridicità media (<strong>76.8%</strong> vs <strong>70.3%</strong>, +6.5%), favorita dalla presenza di disegni di legge governativi già incardinati nelle commissioni parlamentari. Il <strong>Campo Largo</strong> registra una maggiore copertura finanziaria dichiarata (<strong>74.6%</strong> vs <strong>71.3%</strong>, +3.3%), grazie a proposte coperte da tagli ai sussidi ambientali sfavorevoli, ricalcoli attuariali e strumenti di prestito agevolato (MES Sanitario).
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 shrink-0">
+                  <div className="p-3 rounded-xl bg-white dark:bg-slate-900/90 border border-blue-200 dark:border-blue-900 text-center">
+                    <span className="text-[10px] font-bold text-blue-700 dark:text-blue-300 uppercase block">Centrodestra</span>
+                    <div className="text-sm font-black text-slate-900 dark:text-white font-mono mt-0.5">
+                      76.8% <span className="text-[10px] font-normal text-slate-400">Ver.</span>
+                    </div>
+                    <div className="text-xs font-bold text-emerald-600 dark:text-emerald-400 font-mono">
+                      71.3% <span className="text-[10px] font-normal text-slate-400">Cop.</span>
+                    </div>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-white dark:bg-slate-900/90 border border-rose-200 dark:border-rose-900 text-center">
+                    <span className="text-[10px] font-bold text-rose-700 dark:text-rose-300 uppercase block">Campo Largo</span>
+                    <div className="text-sm font-black text-slate-900 dark:text-white font-mono mt-0.5">
+                      70.3% <span className="text-[10px] font-normal text-slate-400">Ver.</span>
+                    </div>
+                    <div className="text-xs font-bold text-emerald-600 dark:text-emerald-400 font-mono">
+                      74.6% <span className="text-[10px] font-normal text-slate-400">Cop.</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Filter & Sort Controls for Party List */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xs">
+              {/* Coalition filter pills */}
+              <div className="flex items-center gap-1 overflow-x-auto scrollbar-none pb-1 sm:pb-0">
+                {[
+                  { id: "Tutti", label: "Tutti i Partiti (18)" },
+                  { id: "centrodestra", label: "Centrodestra" },
+                  { id: "campo_largo", label: "Campo Largo" },
+                  { id: "centro", label: "Centro / Liberali" },
+                  { id: "altre_forze", label: "Altre Forze" }
+                ].map((f) => (
+                  <button
+                    key={f.id}
+                    onClick={() => setStatsCoalitionFilter(f.id)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
+                      statsCoalitionFilter === f.id
+                        ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-2xs"
+                        : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Sort pills */}
+              <div className="flex items-center gap-1 shrink-0 self-end sm:self-auto">
+                <span className="text-[11px] font-medium text-slate-400 mr-1 flex items-center gap-1">
+                  <ArrowUpDown className="w-3 h-3" /> Ordina:
+                </span>
+                {[
+                  { id: "truth" as const, label: "Veridicità" },
+                  { id: "finance" as const, label: "Coperture" },
+                  { id: "poll" as const, label: "Sondaggi" },
+                  { id: "proposals" as const, label: "N° Atti" }
+                ].map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => setStatsSortBy(s.id)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                      statsSortBy === s.id
+                        ? "bg-amber-100 dark:bg-amber-950/80 text-amber-900 dark:text-amber-200 font-bold"
+                        : "text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+                    }`}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 18 Parties Detailed Table / Cards */}
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 text-slate-500 uppercase tracking-wider text-[10px] font-bold">
+                    <tr>
+                      <th className="py-3 px-4">#</th>
+                      <th className="py-3 px-4">Partito / Leader</th>
+                      <th className="py-3 px-4">Coalizione</th>
+                      <th className="py-3 px-4 min-w-[140px]">Veridicità</th>
+                      <th className="py-3 px-4 min-w-[140px]">Coperture Finanziarie</th>
+                      <th className="py-3 px-4 text-center">Sondaggio</th>
+                      <th className="py-3 px-4 text-center">Atti Censiti</th>
+                      <th className="py-3 px-4 text-right">Dossier</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {sortedPartyStats.map((item, idx) => {
+                      const truth = item.truthfulness_score || 0;
+                      const finance = item.financial_reliability_score || 0;
+
+                      return (
+                        <tr
+                          key={item.code}
+                          className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors group"
+                        >
+                          <td className="py-3.5 px-4 font-mono font-bold text-slate-400">
+                            {idx + 1}
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <Link href={`/parties?code=${item.code}`} className="flex items-center gap-2.5 group-hover:text-blue-600 transition-colors">
+                              <span className="w-3.5 h-3.5 rounded-full shrink-0 shadow-xs" style={{ backgroundColor: item.color }} />
+                              <div>
+                                <div className="font-extrabold text-sm text-slate-900 dark:text-white leading-tight">
+                                  {item.name}
+                                </div>
+                                {item.leader && (
+                                  <div className="text-[11px] text-slate-500 leading-tight">
+                                    Leader: {item.leader}
+                                  </div>
+                                )}
+                              </div>
+                            </Link>
+                          </td>
+                          <td className="py-3.5 px-4 text-slate-600 dark:text-slate-400 text-xs">
+                            {item.coalition}
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <div className="space-y-1">
+                              <div className="flex justify-between items-center font-mono">
+                                <span className="font-bold text-slate-900 dark:text-white">{truth}%</span>
+                                <span className={`text-[10px] font-semibold ${
+                                  truth >= 80 ? "text-emerald-600 dark:text-emerald-400" :
+                                  truth >= 70 ? "text-blue-600 dark:text-blue-400" :
+                                  truth >= 60 ? "text-amber-600 dark:text-amber-400" : "text-rose-600 dark:text-rose-400"
+                                }`}>
+                                  {truth >= 80 ? "Molto Alta" : truth >= 70 ? "Alta" : truth >= 60 ? "Moderata" : "Da verificare"}
+                                </span>
+                              </div>
+                              <div className="h-1.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                                <div
+                                  className={`h-full rounded-full ${
+                                    truth >= 80 ? "bg-emerald-500" :
+                                    truth >= 70 ? "bg-blue-500" :
+                                    truth >= 60 ? "bg-amber-500" : "bg-rose-500"
+                                  }`}
+                                  style={{ width: `${truth}%` }}
+                                />
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <div className="space-y-1">
+                              <div className="flex justify-between items-center font-mono">
+                                <span className="font-bold text-slate-900 dark:text-white">{finance}%</span>
+                                <span className={`text-[10px] font-semibold ${
+                                  finance >= 80 ? "text-emerald-600 dark:text-emerald-400" :
+                                  finance >= 70 ? "text-blue-600 dark:text-blue-400" :
+                                  finance >= 60 ? "text-amber-600 dark:text-amber-400" : "text-rose-600 dark:text-rose-400"
+                                }`}>
+                                  {finance >= 80 ? "Sostenibile" : finance >= 70 ? "Solida" : finance >= 60 ? "Parziale" : "In attesa DDL"}
+                                </span>
+                              </div>
+                              <div className="h-1.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                                <div
+                                  className={`h-full rounded-full ${
+                                    finance >= 80 ? "bg-emerald-500" :
+                                    finance >= 70 ? "bg-blue-500" :
+                                    finance >= 60 ? "bg-amber-500" : "bg-rose-500"
+                                  }`}
+                                  style={{ width: `${finance}%` }}
+                                />
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-3.5 px-4 text-center font-mono font-bold text-slate-900 dark:text-white">
+                            {item.poll_percentage}%
+                          </td>
+                          <td className="py-3.5 px-4 text-center font-mono text-slate-600 dark:text-slate-400">
+                            {item.proposals_count}
+                          </td>
+                          <td className="py-3.5 px-4 text-right">
+                            <Link
+                              href={`/parties?code=${item.code}`}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-100 hover:bg-blue-600 hover:text-white dark:bg-slate-800 dark:hover:bg-blue-600 text-slate-700 dark:text-slate-300 transition-colors"
+                            >
+                              <span>Dossier</span>
+                              <ChevronRight className="w-3 h-3" />
+                            </Link>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}

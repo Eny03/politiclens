@@ -128,6 +128,50 @@ PARTY_ACCURATE_DATA = {
         "leader": "Dieter Steger (Obmann)",
         "official_website": "https://www.svp.eu",
         "poll_sources": "Media YouTrend/AGI, SWG, Noto",
+    },
+    "SCN": {
+        "name": "Sud chiama Nord",
+        "leader": "Cateno De Luca (Laura Castelli Presidente)",
+        "coalition": "Autonomie e Territori / Centro Meridionale",
+        "color": "#f58220",
+        "official_website": "https://sud-chiamanord.it",
+        "description": "Movimento politico autonomista, federalista ed equoterritoriale fondato da Cateno De Luca (rappresentato alla Camera dei Deputati e all'ARS). Priorità: perequazione infrastrutturale Nord-Sud, finanziamento integrale dei LEP prima di qualsiasi autonomia differenziata, continuità territoriale per le isole e fiscalità di vantaggio per il Mezzogiorno.",
+        "poll_percentage": 1.2,
+        "poll_trend": "+0.1%",
+        "poll_sources": "Supermedia YouTrend/AGI, SWG, BiDiMedia, Noto",
+    },
+    "PTD": {
+        "name": "Pace Terra Dignità",
+        "leader": "Michele Santoro, Raniero La Valle",
+        "coalition": "Sinistra Pacifista ed Ecologista",
+        "color": "#0d9488",
+        "official_website": "https://www.paceterradignita.it",
+        "description": "Movimento politico pacifista, ecologista e costituzionale fondato da Michele Santoro e Raniero La Valle (2.2% dei voti alle Europee 2024). Punti cardine: cessate il fuoco immediato e stop all'invio di armi, taglio delle spese militari a favore della sanità pubblica, transizione ecologica a trazione pubblica e giustizia sociale.",
+        "poll_percentage": 1.6,
+        "poll_trend": "stabile",
+        "poll_sources": "Media BiDiMedia, SWG, YouTrend",
+    },
+    "PSI": {
+        "name": "Partito Socialista Italiano",
+        "leader": "Enzo Maraio (Segretario Nazionale)",
+        "coalition": "Centrosinistra",
+        "color": "#dc2626",
+        "official_website": "https://www.partitosocialista.it",
+        "description": "Storico partito socialdemocratico, riformista e laico della sinistra democratica italiana (membro fondatore del Partito del Socialismo Europeo - PSE). Punti cardine: salario minimo legale, potenziamento strutturale del Servizio Sanitario Nazionale, scuola pubblica a tempo pieno, laicità dello Stato e diritti sul lavoro.",
+        "poll_percentage": 0.9,
+        "poll_trend": "stabile",
+        "poll_sources": "Media BiDiMedia, Noto Sondaggi",
+    },
+    "AP": {
+        "name": "Alternativa Popolare",
+        "leader": "Stefano Bandecchi (Coordinatore Nazionale), Paolo Alli (Presidente)",
+        "coalition": "Centro / Popolari Europei",
+        "color": "#2563eb",
+        "official_website": "https://www.alternativapopolare.it",
+        "description": "Forza politica liberale e popolare membro ufficiale del PPE (Partito Popolare Europeo), guidata da Stefano Bandecchi (Sindaco di Terni). Fari programmatici: sostegno concreto all'imprenditoria privata, fiscalità agevolata per l'occupazione giovanile, investimenti infrastrutturali e pragmatismo economico.",
+        "poll_percentage": 0.7,
+        "poll_trend": "+0.1%",
+        "poll_sources": "Media BiDiMedia, Noto Sondaggi",
     }
 }
 
@@ -143,7 +187,9 @@ def sync_database_and_seed():
                     setattr(party, k, v)
                 print(f"  Aggiornato partito {code} ({party.name}): poll {party.poll_percentage}%, leader: {party.leader}")
             else:
-                print(f"  AVVISO: Partito {code} non trovato in DB!")
+                party = PoliticalParty(code=code, **data)
+                db.add(party)
+                print(f"  Creato nuovo partito {code} ({party.name}): poll {party.poll_percentage}%")
         db.commit()
 
         # 2. Update AI dossiers & calculated scores for all parties

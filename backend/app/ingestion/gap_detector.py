@@ -47,7 +47,11 @@ PARTY_SEARCH_ANCHORS = {
     "Rifondazione Comunista": "Rifondazione Comunista Maurizio Acerbo",
     "Potere al Popolo": "Potere al Popolo Marta Collot",
     "Radicali Italiani": "Radicali Italiani Matteo Hallissey",
-    "Südtiroler Volkspartei": "Südtiroler Volkspartei Dieter Steger"
+    "Südtiroler Volkspartei": "Südtiroler Volkspartei Dieter Steger",
+    "Sud chiama Nord": "Sud chiama Nord Cateno De Luca",
+    "Pace Terra Dignità": "Pace Terra Dignità Michele Santoro",
+    "Partito Socialista Italiano": "Partito Socialista Italiano Enzo Maraio",
+    "Alternativa Popolare": "Alternativa Popolare Stefano Bandecchi"
 }
 
 TOPIC_FOCUSED_KEYWORDS = {

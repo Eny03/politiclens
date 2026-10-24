@@ -323,6 +323,79 @@ PARTY_PROFILES_KNOWLEDGE_BASE: Dict[str, Dict[str, Any]] = {
         ],
         "punti_forza": "Eccezionale efficienza gestionale del bilancio provinciale e piena soddisfazione dei servizi per i cittadini altoatesini.",
         "criticita": "Ambito di rappresentanza rigorosamente circoscritto alla provincia di Bolzano senza mire sul piano nazionale generale."
+    },
+    "Sud chiama Nord": {
+        "identita": "Autonomismo civico, federalismo solidale ed equità territoriale Nord-Sud",
+        "ruolo_legislatura": "Movimento politico guidato da Cateno De Luca e Laura Castelli, con rappresentanza parlamentare alla Camera (on. Francesco Gallo) e all'ARS.",
+        "visione_economica": "Riequilibrio delle disparità territoriali tra Nord e Sud, eliminazione della spesa storica nei trasferimenti statali ai Comuni, finanziamento integrale dei LEP prima di qualsiasi intesa di regionalismo differenziato e continuità territoriale garantita per le isole.",
+        "battaglie_chiave": [
+            "Finanziamento integrale dei LEP (Livelli Essenziali delle Prestazioni) ed eliminazione della spesa storica discriminatoria per il Sud",
+            "Continuità territoriale aerea e marittima garantita con tariffe agevolate fisse tutto l'anno per residenti in Sicilia e Sardegna",
+            "ZES Unica con decontribuzione al 100% per nuove assunzioni stabili di giovani e donne nel Mezzogiorno",
+            "Sblocco delle infrastrutture idriche, completamento delle dighe e ristori alle aziende agricole colpite dalla siccità",
+            "Rinegoziazione trentennale dei mutui CDP per i comuni in predissesto o dissesto finanziario senza penalità"
+        ],
+        "evoluzione_2022_2026": [
+            {"periodo": "2022 (Elezioni Politiche e Regionali)", "sintesi": "Elezione di parlamentari nazionali e radicamento come principale forza autonomista della Sicilia."},
+            {"periodo": "2023-2024 (Lista Libertà)", "sintesi": "Costruzione del cartello elettorale Libertà per le Europee 2024 a tutela delle autonomie locali e del civismo territoriale."},
+            {"periodo": "2025-2026 (Battaglie Parlamentari)", "sintesi": "Contrasto all'autonomia differenziata senza LEP e vertenze serrate per i trasporti e l'emergenza idrica in Sicilia."}
+        ],
+        "punti_forza": "Forte radicamento amministrativo nei territori comunali; difesa intransigente dell'equità nei servizi essenziali (sanità, trasporti, scuola) per il Meridione.",
+        "criticita": "Concentrazione del consenso prevalente nel Sud e nelle Isole; necessità di costruire alleanze stabili sul piano nazionale."
+    },
+    "Pace Terra Dignità": {
+        "identita": "Pacifismo radicale, ecologia costituzionale, antimilitarismo e diritti sociali",
+        "ruolo_legislatura": "Movimento politico fondato da Michele Santoro e Raniero La Valle (2.2% dei consensi alle elezioni europee 2024).",
+        "visione_economica": "Drastica riduzione delle spese militari e stop alla corsa al riarmo per finanziare la sanità pubblica e la transizione ecologica; tassazione straordinaria su colossi bellici ed energetici; salario minimo legale a 10 euro netti.",
+        "battaglie_chiave": [
+            "Cessate il fuoco immediato nei conflitti in Ucraina e Medio Oriente, stop all'invio di armi e neutralità attiva dell'Italia",
+            "Aumento del Fondo Sanitario Nazionale ad almeno l'8% del PIL e piano di 40.000 assunzioni di medici e infermieri",
+            "Salario minimo a 10 euro netti l'ora e riduzione dell'orario di lavoro a 32 ore a parità salariale",
+            "Uscita rapida dalle fonti fossili, stop a nuovi rigassificatori e redistribuzione della ricchezza con patrimoniale progressiva",
+            "Amnistia e depenalizzazione per reati minori per svuotare le carceri e tutelare la dignità umana"
+        ],
+        "evoluzione_2022_2026": [
+            {"periodo": "2024 (Campagna Europee)", "sintesi": "Oltre 511.000 voti (2.2%) raccolti con una lista unitaria per la pace, la transizione verde e la giustizia sociale."},
+            {"periodo": "2025-2026 (Mobilitazione permanente)", "sintesi": "Campagne contro il riarmo europeo, mobilitazioni studentesche e comitati territoriali per la sanità pubblica."}
+        ],
+        "punti_forza": "Riconoscibilità etica e mediatica di Michele Santoro; capacità di aggregare il voto pacifista, laico e di sinistra alternativa.",
+        "criticita": "La rinuncia agli impegni atlantici e NATO pone forti tensioni con il quadro geopolitico occidentale e con le regole europee sui bilanci."
+    },
+    "Partito Socialista Italiano": {
+        "identita": "Socialdemocrazia storica, riformismo laico, welfare universale e diritti del lavoro",
+        "ruolo_legislatura": "Storico partito della sinistra democratica italiana guidato da Enzo Maraio (membro del Partito del Socialismo Europeo).",
+        "visione_economica": "Economia sociale di mercato, investimento prioritario nella scuola e nella sanità pubblica, contrasto alla precarietà giovanile e piano nazionale di edilizia residenziale pubblica a canone calmierato.",
+        "battaglie_chiave": [
+            "Salario minimo legale legato alla contrattazione collettiva e superamento del precariato giovanile",
+            "Piano Casa Nazionale con 100.000 alloggi di edilizia residenziale pubblica a canone sociale",
+            "Potenziamento strutturale del Servizio Sanitario Nazionale e blocco dell'intramoenia a pagamento quando le liste d'attesa superano i limiti",
+            "Legge quadro sul fine vita e riconoscimento del matrimonio egualitario",
+            "Tempo pieno garantito nelle scuole primarie del Mezzogiorno con mensa scolastica gratuita"
+        ],
+        "evoluzione_2022_2026": [
+            {"periodo": "2022-2024", "sintesi": "Partecipazione al cartello riformista ed europeista, radicamento nelle amministrazioni locali e tutela del lavoro dipendente."},
+            {"periodo": "2025-2026", "sintesi": "Iniziativa per il piano casa giovanile e convergenza con l'opposizione democratica su sanità e salario minimo."}
+        ],
+        "punti_forza": "Centenaria tradizione politica socialdemocratica e solido raccordo con i partiti socialisti europei (SPD, PSOE).",
+        "criticita": "Consenso elettorale contenuto a livello nazionale, che rende necessaria l'aggregazione in coalizioni di centrosinistra."
+    },
+    "Alternativa Popolare": {
+        "identita": "Popolarismo europeo (PPE), liberalismo d'impresa, sussidiarietà e pragmatismo civico",
+        "ruolo_legislatura": "Movimento politico guidato da Stefano Bandecchi (Sindaco di Terni) e Paolo Alli (Presidente AP e già Presidente dell'Assemblea Parlamentare NATO).",
+        "visione_economica": "Sostegno concreto alla libera impresa e alle partite IVA, no tax area per i giovani fino a 15.000 euro, decontribuzione per nuove imprese e semplificazione burocratica per le opere pubbliche.",
+        "battaglie_chiave": [
+            "No tax area fino a 15.000 euro per lavoratori e partite IVA under 35",
+            "Piano straordinario di 10.000 assunzioni nelle forze dell'ordine e sicurezza integrata nelle periferie e stazioni",
+            "Sblocco rapido dei cantieri delle opere strategiche e accelerazione dell'Alta Velocità ferroviaria",
+            "Assegno di natalità di 5.000 euro a fondo perduto nei comuni sotto i 20.000 abitanti a rischio spopolamento",
+            "Apertura serale e nei weekend della diagnostica pubblica e accordi a tariffa sociale per azzerare le liste d'attesa"
+        ],
+        "evoluzione_2022_2026": [
+            {"periodo": "2023-2024", "sintesi": "Vittoria al Comune di Terni con l'elezione di Bandecchi a Sindaco e corsa autonoma alle elezioni europee."},
+            {"periodo": "2025-2026", "sintesi": "Crescita del radicamento civico nel Centro Italia e posizionamento come polo moderato e pragmatico nel PPE."}
+        ],
+        "punti_forza": "Forte leadership carismatica ed esecutiva; pragmatismo manageriale applicato all'amministrazione degli enti locali.",
+        "criticita": "Profilo politico fortemente accentrato sulla figura del leader e polarizzazione comunicativa sui media."
     }
 }
 

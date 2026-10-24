@@ -200,6 +200,34 @@ MONITORED_FEEDS = [
         "is_active": True
     },
     {
+        "name": "Live Web Search - Sud chiama Nord & Cateno De Luca",
+        "url": "https://news.google.com/rss/search?q=Sud+chiama+Nord+Cateno+De+Luca+proposte&hl=it&gl=IT&ceid=IT:it",
+        "category": "Ricerca Web AI",
+        "reliability": "Massima",
+        "is_active": True
+    },
+    {
+        "name": "Live Web Search - Pace Terra Dignità & Michele Santoro",
+        "url": "https://news.google.com/rss/search?q=Pace+Terra+Dignita+Michele+Santoro+proposte&hl=it&gl=IT&ceid=IT:it",
+        "category": "Ricerca Web AI",
+        "reliability": "Massima",
+        "is_active": True
+    },
+    {
+        "name": "Live Web Search - Partito Socialista Italiano & Enzo Maraio",
+        "url": "https://news.google.com/rss/search?q=Partito+Socialista+Italiano+Maraio+proposte&hl=it&gl=IT&ceid=IT:it",
+        "category": "Ricerca Web AI",
+        "reliability": "Massima",
+        "is_active": True
+    },
+    {
+        "name": "Live Web Search - Alternativa Popolare & Stefano Bandecchi",
+        "url": "https://news.google.com/rss/search?q=Alternativa+Popolare+Stefano+Bandecchi+proposte&hl=it&gl=IT&ceid=IT:it",
+        "category": "Ricerca Web AI",
+        "reliability": "Massima",
+        "is_active": True
+    },
+    {
         "name": "Live Web Search - Senato & Camera dei Deputati",
         "url": "https://news.google.com/rss/search?q=Parlamento+Camera+Senato+disegno+di+legge+approvato&hl=it&gl=IT&ceid=IT:it",
         "category": "Atti Parlamentari",
@@ -299,6 +327,26 @@ PARTY_OFFICIAL_CHANNELS = {
         "website": "https://www.svp.eu",
         "social_handles": ["@svp_online"],
         "rss": "https://www.svp.eu/feed/"
+    },
+    "Sud chiama Nord": {
+        "website": "https://sud-chiamanord.it",
+        "social_handles": ["@CatenoDeLuca", "@SudChiamaNord", "@CastelliLaura"],
+        "rss": "https://sud-chiamanord.it/feed/"
+    },
+    "Pace Terra Dignità": {
+        "website": "https://www.paceterradignita.it",
+        "social_handles": ["@michelesantorotv", "@PaceTerraDignita"],
+        "rss": "https://www.paceterradignita.it/feed/"
+    },
+    "Partito Socialista Italiano": {
+        "website": "https://www.partitosocialista.it",
+        "social_handles": ["@EnzoMaraio", "@PSI_Socialisti"],
+        "rss": "https://www.partitosocialista.it/feed/"
+    },
+    "Alternativa Popolare": {
+        "website": "https://www.alternativapopolare.it",
+        "social_handles": ["@StefanoBandecchi", "@Alt_Popolare"],
+        "rss": "https://www.alternativapopolare.it/feed/"
     }
 }
 
@@ -321,7 +369,11 @@ PARTY_ALIASES = {
     "Rifondazione Comunista": ["rifondazione comunista", "prc", "maurizio acerbo", "acerbo", "sinistra europea"],
     "Potere al Popolo": ["potere al popolo", "pap", "giuliano granato", "marta collot", "unione popolare"],
     "Democrazia Sovrana Popolare": ["democrazia sovrana popolare", "dsp", "marco rizzo", "francesco toscano", "sovrana popolare"],
-    "Südtiroler Volkspartei": ["südtiroler volkspartei", "svp", "dieter steger", "steger", "herbert dorfmann"]
+    "Südtiroler Volkspartei": ["südtiroler volkspartei", "svp", "dieter steger", "steger", "herbert dorfmann"],
+    "Sud chiama Nord": ["sud chiama nord", "scn", "cateno de luca", "de luca cateno", "laura castelli", "francesco gallo", "dafne musolino", "libertà de luca"],
+    "Pace Terra Dignità": ["pace terra dignità", "pace terra e dignità", "pace terra e dignita", "ptd", "michele santoro", "santoro", "raniero la valle"],
+    "Partito Socialista Italiano": ["partito socialista italiano", "partito socialista", "psi", "enzo maraio", "maraio", "socialisti italiani"],
+    "Alternativa Popolare": ["alternativa popolare", "ap", "stefano bandecchi", "bandecchi", "paolo alli"]
 }
 
 # Macro-topics detection keywords

@@ -55,7 +55,7 @@ export default function SourcesPage() {
   const [scanMessage, setScanMessage] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [selectedGapParty, setSelectedGapParty] = useState<string>("Tutti");
-  const [showAllGaps, setShowAllGaps] = useState<boolean>(true);
+  const [showAllGaps, setShowAllGaps] = useState<boolean>(false);
 
   // Manual ingest form state
   const [manualUrl, setManualUrl] = useState("");
@@ -225,19 +225,19 @@ export default function SourcesPage() {
                     </span>
                     {totalZeros > 0 ? (
                       <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300">
-                        {totalZeros} vuoti assoluti in ricerca
+                        {totalZeros} temi scoperti in ricerca
                       </span>
                     ) : (
                       <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
-                        100% temi presidiati
+                        100% temi presidiati (0 lacune)
                       </span>
                     )}
                     <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300">
-                      {gaps.length} target di approfondimento attivo
+                      {gaps.length} target monitorati per aggiornamenti
                     </span>
                   </h2>
                   <p className="text-xs text-slate-500">
-                    Questo è il radar con cui l'AI scandaglia autonomamente Google News e DuckDuckGo ogni 10-30 min per individuare nuovi atti parlamentari e arricchire i temi a copertura minima.
+                    L'AI scandaglia autonomamente Google News e DuckDuckGo ogni 10-30 min per individuare nuovi atti parlamentari e verificare coperture finanziarie.
                   </p>
                 </div>
               </div>
@@ -249,7 +249,7 @@ export default function SourcesPage() {
                   onChange={(e) => setSelectedGapParty(e.target.value)}
                   className="px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-medium text-slate-700 dark:text-slate-200 focus:outline-hidden"
                 >
-                  <option value="Tutti">Tutti i partiti ({gaps.length})</option>
+                  <option value="Tutti">Tutti i partiti ({uniqueParties.length})</option>
                   {uniqueParties.map((p) => {
                     const cnt = gaps.filter((g) => g.party_name === p).length;
                     return (
@@ -266,13 +266,18 @@ export default function SourcesPage() {
                     onClick={() => setShowAllGaps(!showAllGaps)}
                     className="px-3 py-1.5 rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-xs font-semibold text-blue-700 dark:text-blue-300 transition-colors cursor-pointer"
                   >
-                    {showAllGaps ? "Mostra solo priorità (8)" : `Mostra tutte (${gaps.length})`}
+                    {showAllGaps ? "Mostra solo priorità (8)" : `Mostra tutti i target (${gaps.length})`}
                   </button>
                 )}
               </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
+              {filteredGaps.length === 0 && (
+                <div className="col-span-full py-8 text-center text-xs text-slate-400">
+                  Nessun target prioritario per questo partito: tutti i macro-temi risultano presidiati.
+                </div>
+              )}
               {filteredGaps.map((g, idx) => (
                 <div
                   key={idx}

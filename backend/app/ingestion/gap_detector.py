@@ -367,13 +367,20 @@ async def autonomous_targeted_gap_search(db: Session, max_gaps: int = 6) -> Dict
             if not extracted:
                 comm = _extract_gap_policy_commitment(raw_text, p_name, topic, title=art.get("title"))
                 if comm:
-                    feasibility, status, motivazione, fonte_verif = analyze_feasibility_and_factcheck(
+                    from app.ai.fiscal_calculator import calculate_fiscal_impact_and_coverage
+                    f_calc = calculate_fiscal_impact_and_coverage(
                         partito=p_name,
                         macro_argomento=topic,
                         sintesi=comm["sintesi"],
                         costo_stimato=comm["costo"],
-                        coperture=comm["coperture"]
+                        coperture_dichiarate=comm["coperture"]
                     )
+                    comm["costo"] = f_calc["costo_stimato"]
+                    comm["coperture"] = f_calc["coperture_dichiarate"]
+                    feasibility = f_calc["fattibilita_finanziaria"]
+                    status = f_calc["fact_check_status"]
+                    motivazione = f_calc["fact_check_motivazione"]
+                    fonte_verif = f_calc["fact_check_fonte"]
                     
                     text_to_embed = f"{p_name} {topic} {comm['sintesi']}"
                     emb_list = await get_text_embedding(text_to_embed)

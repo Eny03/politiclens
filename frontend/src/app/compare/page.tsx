@@ -491,7 +491,7 @@ export default function ComparePage() {
                                   <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                                     {prop.tipo_azione || "Proposta"}
                                   </span>
-                                  <StatusBadge status={prop.fact_check_status} size="sm" />
+                                  <StatusBadge status={prop.fact_check_status} score={prop.truth_score} size="sm" />
                                 </div>
                                 <p className="text-xs font-semibold text-slate-900 dark:text-slate-100 leading-snug">
                                   {prop.dichiarazione_sintesi}
@@ -555,7 +555,7 @@ export default function ComparePage() {
                                   <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                                     {prop.tipo_azione || "Proposta"}
                                   </span>
-                                  <StatusBadge status={prop.fact_check_status} size="sm" />
+                                  <StatusBadge status={prop.fact_check_status} score={prop.truth_score} size="sm" />
                                 </div>
                                 <p className="text-xs font-semibold text-slate-900 dark:text-slate-100 leading-snug">
                                   {prop.dichiarazione_sintesi}
@@ -663,7 +663,7 @@ export default function ComparePage() {
 
                         <div className="pt-2 border-t border-slate-200/50 dark:border-slate-700/50 flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[10px] text-slate-500 mt-2">
                           <span className="leading-tight">{cell.proposals[0]?.costo_stimato || "Non quantificato"}</span>
-                          <StatusBadge status={cell.proposals[0]?.fact_check_status || "Verificato"} size="sm" />
+                          <StatusBadge status={cell.proposals[0]?.fact_check_status || "Verificato"} score={cell.proposals[0]?.truth_score} size="sm" />
                         </div>
                       </div>
                     );

@@ -3,10 +3,11 @@ import { CheckCircle2, AlertTriangle, AlertCircle, HelpCircle, XCircle } from "l
 
 interface StatusBadgeProps {
   status: string;
+  score?: number;
   size?: "sm" | "md";
 }
 
-export function StatusBadge({ status, size = "md" }: StatusBadgeProps) {
+export function StatusBadge({ status, score, size = "md" }: StatusBadgeProps) {
   const normStatus = status?.toLowerCase() || "";
   
   let colorClasses = "bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-800/60 dark:text-slate-300 dark:border-slate-700";
@@ -33,6 +34,10 @@ export function StatusBadge({ status, size = "md" }: StatusBadgeProps) {
   return (
     <span className={`inline-flex items-center gap-1 rounded-full border whitespace-nowrap shrink-0 shadow-2xs ${padding} ${colorClasses}`}>
       {icon}
+      {score !== undefined && (
+        <span className="font-mono font-bold tracking-tight">{score}%</span>
+      )}
+      {score !== undefined && <span className="opacity-40">•</span>}
       <span>{status}</span>
     </span>
   );

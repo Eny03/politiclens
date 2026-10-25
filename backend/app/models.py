@@ -43,6 +43,7 @@ class PoliticalProposal(Base):
     fact_check_status = Column(String(50), default="In attesa di copertura", index=True) # "Verificato", "Non verificabile", "Esagerato", "Fake / Infondato", "In attesa di copertura"
     fact_check_motivazione = Column(Text, nullable=True)
     fact_check_fonte = Column(String(500), nullable=True)
+    truth_score = Column(Float, default=75.0) # Voto di veridicità a salti del 5% (0.0 to 100.0)
     
     # Metadata & Tracking
     fonte_url = Column(String(1000), nullable=False)

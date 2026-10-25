@@ -36,16 +36,17 @@ def seed_database_if_empty():
     Base.metadata.create_all(bind=engine)
     try:
         with engine.connect() as conn:
-            for col, ctype in [
-                ("dossier_ai", "TEXT"),
-                ("poll_percentage", "FLOAT"),
-                ("poll_trend", "VARCHAR(20)"),
-                ("poll_sources", "VARCHAR(255)"),
-                ("truthfulness_score", "FLOAT"),
-                ("financial_reliability_score", "FLOAT")
+            for tbl, col, ctype in [
+                ("political_parties", "dossier_ai", "TEXT"),
+                ("political_parties", "poll_percentage", "FLOAT"),
+                ("political_parties", "poll_trend", "VARCHAR(20)"),
+                ("political_parties", "poll_sources", "VARCHAR(255)"),
+                ("political_parties", "truthfulness_score", "FLOAT"),
+                ("political_parties", "financial_reliability_score", "FLOAT"),
+                ("political_proposals", "truth_score", "FLOAT")
             ]:
                 try:
-                    conn.execute(text(f"ALTER TABLE political_parties ADD COLUMN {col} {ctype}"))
+                    conn.execute(text(f"ALTER TABLE {tbl} ADD COLUMN {col} {ctype}"))
                     conn.commit()
                 except Exception:
                     pass
@@ -167,6 +168,7 @@ def seed_database_if_empty():
                     fact_check_status=prop.get("fact_check_status", "In attesa di copertura"),
                     fact_check_motivazione=prop.get("fact_check_motivazione"),
                     fact_check_fonte=prop.get("fact_check_fonte"),
+                    truth_score=prop.get("truth_score", 75.0),
                     fonte_url=prop.get("fonte_url", ""),
                     fonte_titolo=prop.get("fonte_titolo"),
                     fonte_testata=prop.get("fonte_testata"),
@@ -444,7 +446,7 @@ def seed_database_if_empty():
                     p.coperture_dichiarate = f_calc["coperture_dichiarate"]
                     p.fattibilita_finanziaria = f_calc["fattibilita_finanziaria"]
 
-                feas, st, mot, src = analyze_feasibility_and_factcheck(
+                feas_data = analyze_feasibility_and_factcheck(
                     partito=p.partito,
                     macro_argomento=p.macro_argomento,
                     sintesi=p.dichiarazione_sintesi,
@@ -452,19 +454,22 @@ def seed_database_if_empty():
                     coperture=p.coperture_dichiarate,
                     raw_text=p.raw_text or ""
                 )
+                feas, st, mot, src = feas_data[:4]
+                t_vote = feas_data[4] if len(feas_data) > 4 else 75.0
                 p.fact_check_status = st
                 p.fact_check_motivazione = mot
                 p.fact_check_fonte = src
+                p.truth_score = t_vote
             db.commit()
 
-            # Recalculate and persist realistic party truthfulness and coverage scores
+            # Recalculate and persist calibrated party truthfulness and coverage scores
             from app.ai.fact_checker import calculate_proposal_truthfulness_score
             for party in db.query(PoliticalParty).all():
                 p_props = db.query(PoliticalProposal).filter(
                     (PoliticalProposal.party_id == party.id) | (PoliticalProposal.partito.ilike(f"%{party.name}%"))
                 ).all()
                 if p_props:
-                    party.truthfulness_score = round(sum(calculate_proposal_truthfulness_score(pr.fact_check_status) for pr in p_props) / len(p_props), 1)
+                    party.truthfulness_score = round(sum((pr.truth_score if hasattr(pr, 'truth_score') and pr.truth_score is not None else calculate_proposal_truthfulness_score(pr.fact_check_status)) for pr in p_props) / len(p_props), 1)
                     party.financial_reliability_score = round(sum(calculate_financial_coverage_percentage(pr.costo_stimato, pr.coperture_dichiarate, pr.dichiarazione_sintesi) for pr in p_props) / len(p_props), 1)
             db.commit()
             print("[Database] Realistic Art. 81 public finance audit and factual veracity applied cleanly.")

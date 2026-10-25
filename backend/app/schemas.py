@@ -57,6 +57,7 @@ class PoliticalProposalDetail(BaseModel):
     fact_check_status: str
     fact_check_motivazione: Optional[str] = None
     fact_check_fonte: Optional[str] = None
+    truth_score: Optional[float] = 75.0
     fonte_url: str
     fonte_titolo: Optional[str] = None
     fonte_testata: Optional[str] = None

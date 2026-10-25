@@ -72,11 +72,11 @@ export function ProposalCard({ proposal }: ProposalCardProps) {
               </span>
             </div>
 
-            {/* Fact-Check Status */}
+            {/* Fact-Check Status & Vote */}
             <div className="flex items-center justify-between py-1.5 px-2.5 rounded-lg bg-slate-50/80 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800/80 gap-2">
-              <span className="text-[11px] font-semibold text-slate-500 shrink-0">Verifica:</span>
+              <span className="text-[11px] font-semibold text-slate-500 shrink-0">Voto Veridicità:</span>
               <div className="shrink-0">
-                <StatusBadge status={proposal.fact_check_status} size="sm" />
+                <StatusBadge status={proposal.fact_check_status} score={proposal.truth_score} size="sm" />
               </div>
             </div>
           </div>

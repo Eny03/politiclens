@@ -79,6 +79,7 @@ export interface PoliticalProposal {
   fact_check_status: string;
   fact_check_motivazione?: string;
   fact_check_fonte?: string;
+  truth_score?: number;
   fonte_url: string;
   fonte_titolo?: string;
   fonte_testata?: string;

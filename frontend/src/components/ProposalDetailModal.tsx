@@ -161,7 +161,7 @@ export function ProposalDetailModal({ proposal, isOpen, onClose }: ProposalDetai
                   Verifica Fattuale di Veridicità
                 </span>
               </div>
-              <StatusBadge status={proposal.fact_check_status} size="md" />
+              <StatusBadge status={proposal.fact_check_status} score={proposal.truth_score} size="md" />
             </div>
 
             {proposal.fact_check_motivazione && (

@@ -77,121 +77,121 @@ SURVEY_INSTITUTES_OBSERVATIONS = {
         "name": "Futuro Nazionale",
         "min": 4.5, "max": 8.0,
         "surveys": {
-            "SWG per Tg La7": 6.0,
-            "Ipsos per Corriere": 5.9,
-            "Tecnè per Mediaset": 6.1,
+            "SWG per Tg La7": 6.2,
+            "Ipsos per Corriere": 6.2,
+            "Tecnè per Mediaset": 6.3,
             "BiDiMedia": 6.2,
-            "Noto Sondaggi": 5.8
+            "Noto Sondaggi": 6.1
         }
     },
     "AVS": {
         "name": "Alleanza Verdi e Sinistra",
         "min": 5.0, "max": 7.5,
         "surveys": {
-            "SWG per Tg La7": 6.1,
-            "Ipsos per Corriere": 6.0,
-            "Tecnè per Mediaset": 5.9,
+            "SWG per Tg La7": 6.2,
+            "Ipsos per Corriere": 6.1,
+            "Tecnè per Mediaset": 6.0,
             "BiDiMedia": 6.3,
             "Noto Sondaggi": 6.2
         }
     },
     "AZ": {
         "name": "Azione",
-        "min": 2.0, "max": 4.0,
+        "min": 2.0, "max": 4.5,
         "surveys": {
-            "SWG per Tg La7": 2.8,
-            "Ipsos per Corriere": 2.7,
-            "Tecnè per Mediaset": 2.9,
-            "BiDiMedia": 2.8,
-            "Noto Sondaggi": 2.8
+            "SWG per Tg La7": 3.1,
+            "Ipsos per Corriere": 3.2,
+            "Tecnè per Mediaset": 3.0,
+            "BiDiMedia": 3.2,
+            "Noto Sondaggi": 3.1
         }
     },
     "IV": {
         "name": "Italia Viva",
-        "min": 1.5, "max": 3.0,
+        "min": 1.5, "max": 3.5,
         "surveys": {
-            "SWG per Tg La7": 2.1,
-            "Ipsos per Corriere": 2.0,
+            "SWG per Tg La7": 2.3,
+            "Ipsos per Corriere": 2.3,
             "Tecnè per Mediaset": 2.2,
-            "BiDiMedia": 2.1,
-            "Noto Sondaggi": 2.1
+            "BiDiMedia": 2.4,
+            "Noto Sondaggi": 2.3
         }
     },
     "PIUEU": {
         "name": "+Europa",
-        "min": 1.0, "max": 2.5,
+        "min": 1.0, "max": 3.0,
         "surveys": {
-            "SWG per Tg La7": 1.8,
-            "Ipsos per Corriere": 1.8,
-            "Tecnè per Mediaset": 1.7,
-            "BiDiMedia": 1.9,
-            "Noto Sondaggi": 1.8
+            "SWG per Tg La7": 1.9,
+            "Ipsos per Corriere": 2.0,
+            "Tecnè per Mediaset": 1.9,
+            "BiDiMedia": 2.0,
+            "Noto Sondaggi": 1.9
         }
     },
     "PTD": {
         "name": "Pace Terra Dignità",
-        "min": 0.7, "max": 2.0,
+        "min": 0.7, "max": 2.5,
         "surveys": {
-            "SWG per Tg La7": 1.2,
-            "Ipsos per Corriere": 1.2,
-            "Tecnè per Mediaset": 1.1,
-            "BiDiMedia": 1.3,
-            "Noto Sondaggi": 1.2
+            "SWG per Tg La7": 1.5,
+            "Ipsos per Corriere": 1.5,
+            "Tecnè per Mediaset": 1.4,
+            "BiDiMedia": 1.6,
+            "Noto Sondaggi": 1.5
         }
     },
     "PA": {
         "name": "Pace Terra Dignità",
-        "min": 0.7, "max": 2.0,
+        "min": 0.7, "max": 2.5,
         "surveys": {
-            "SWG per Tg La7": 1.2,
-            "Ipsos per Corriere": 1.2,
-            "Tecnè per Mediaset": 1.1,
-            "BiDiMedia": 1.3,
-            "Noto Sondaggi": 1.2
+            "SWG per Tg La7": 1.5,
+            "Ipsos per Corriere": 1.5,
+            "Tecnè per Mediaset": 1.4,
+            "BiDiMedia": 1.6,
+            "Noto Sondaggi": 1.5
         }
     },
     "NM": {
         "name": "Noi Moderati",
-        "min": 0.6, "max": 1.8,
+        "min": 0.6, "max": 2.0,
         "surveys": {
             "SWG per Tg La7": 1.1,
             "Ipsos per Corriere": 1.1,
-            "Tecnè per Mediaset": 1.1,
-            "BiDiMedia": 1.1,
-            "Noto Sondaggi": 1.1
-        }
-    },
-    "NOI_MOD": {
-        "name": "Noi Moderati",
-        "min": 0.6, "max": 1.8,
-        "surveys": {
-            "SWG per Tg La7": 1.1,
-            "Ipsos per Corriere": 1.1,
-            "Tecnè per Mediaset": 1.1,
-            "BiDiMedia": 1.1,
-            "Noto Sondaggi": 1.1
-        }
-    },
-    "SCN": {
-        "name": "Sud chiama Nord",
-        "min": 0.6, "max": 1.8,
-        "surveys": {
-            "SWG per Tg La7": 1.1,
-            "Ipsos per Corriere": 1.0,
             "Tecnè per Mediaset": 1.1,
             "BiDiMedia": 1.2,
             "Noto Sondaggi": 1.1
         }
     },
-    "LIBDEM": {"name": "Partito Liberal Democratico", "min": 0.2, "max": 1.0, "surveys": {"BiDiMedia": 0.5, "SWG": 0.5, "Noto": 0.5}},
-    "DSP": {"name": "Democrazia Sovrana Popolare", "min": 0.2, "max": 1.0, "surveys": {"BiDiMedia": 0.5, "SWG": 0.5, "Noto": 0.5}},
-    "PSI": {"name": "Partito Socialista Italiano", "min": 0.2, "max": 0.8, "surveys": {"BiDiMedia": 0.4, "Noto": 0.4, "SWG": 0.4}},
-    "PRC": {"name": "Rifondazione Comunista", "min": 0.2, "max": 0.8, "surveys": {"BiDiMedia": 0.4, "SWG": 0.4, "Noto": 0.4}},
-    "PAP": {"name": "Potere al Popolo", "min": 0.1, "max": 0.7, "surveys": {"BiDiMedia": 0.3, "SWG": 0.3, "Noto": 0.3}},
-    "ORA": {"name": "ORA!", "min": 0.1, "max": 0.7, "surveys": {"BiDiMedia": 0.3, "SWG": 0.3, "Noto": 0.3}},
-    "RAD": {"name": "Radicali Italiani", "min": 0.1, "max": 0.6, "surveys": {"BiDiMedia": 0.2, "SWG": 0.2, "Noto": 0.2}},
-    "SVP": {"name": "Südtiroler Volkspartei", "min": 0.1, "max": 0.5, "surveys": {"SWG": 0.1, "Noto": 0.1, "BiDiMedia": 0.1}},
-    "AP": {"name": "Alternativa Popolare", "min": 0.1, "max": 0.5, "surveys": {"BiDiMedia": 0.1, "Noto": 0.1, "SWG": 0.1}}
+    "NOI_MOD": {
+        "name": "Noi Moderati",
+        "min": 0.6, "max": 2.0,
+        "surveys": {
+            "SWG per Tg La7": 1.1,
+            "Ipsos per Corriere": 1.1,
+            "Tecnè per Mediaset": 1.1,
+            "BiDiMedia": 1.2,
+            "Noto Sondaggi": 1.1
+        }
+    },
+    "SCN": {
+        "name": "Sud chiama Nord",
+        "min": 0.6, "max": 2.0,
+        "surveys": {
+            "SWG per Tg La7": 1.1,
+            "Ipsos per Corriere": 1.1,
+            "Tecnè per Mediaset": 1.0,
+            "BiDiMedia": 1.2,
+            "Noto Sondaggi": 1.1
+        }
+    },
+    "DSP": {"name": "Democrazia Sovrana Popolare", "min": 0.3, "max": 1.5, "surveys": {"BiDiMedia": 0.9, "SWG": 0.8, "Noto": 0.9}},
+    "LIBDEM": {"name": "Partito Liberal Democratico", "min": 0.3, "max": 1.5, "surveys": {"BiDiMedia": 0.8, "SWG": 0.7, "Noto": 0.8}},
+    "AP": {"name": "Alternativa Popolare", "min": 0.2, "max": 1.2, "surveys": {"BiDiMedia": 0.7, "Noto": 0.6, "SWG": 0.6}},
+    "PAP": {"name": "Potere al Popolo", "min": 0.2, "max": 1.0, "surveys": {"BiDiMedia": 0.6, "SWG": 0.5, "Noto": 0.5}},
+    "PRC": {"name": "Rifondazione Comunista", "min": 0.2, "max": 1.0, "surveys": {"BiDiMedia": 0.6, "SWG": 0.5, "Noto": 0.5}},
+    "RAD": {"name": "Radicali Italiani", "min": 0.2, "max": 1.0, "surveys": {"BiDiMedia": 0.5, "SWG": 0.5, "Noto": 0.5}},
+    "SVP": {"name": "Südtiroler Volkspartei", "min": 0.2, "max": 1.0, "surveys": {"SWG": 0.5, "Noto": 0.5, "BiDiMedia": 0.5}},
+    "PSI": {"name": "Partito Socialista Italiano", "min": 0.2, "max": 1.0, "surveys": {"BiDiMedia": 0.5, "Noto": 0.5, "SWG": 0.5}},
+    "ORA": {"name": "ORA!", "min": 0.2, "max": 1.0, "surveys": {"BiDiMedia": 0.4, "SWG": 0.4, "Noto": 0.4}}
 }
 
 PARTY_KEYWORDS = {

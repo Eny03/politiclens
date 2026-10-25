@@ -25,6 +25,37 @@ TRUTH_WEIGHTS = {
     "Non verificabile": 50.0
 }
 
+# Granular Truthfulness Thresholds (Every 5%)
+TRUTH_THRESHOLDS = [
+    {"min_score": 95.0, "tier": "Eccellente", "label": "≥95% (Eccellente)", "desc": "Pienamente verificato e asseverato con atti parlamentari o evidenze scientifiche."},
+    {"min_score": 90.0, "tier": "Molto Alta", "label": "≥90% (Molto Alta)", "desc": "Elevata aderenza ai parametri ufficiali con scostamenti trascurabili."},
+    {"min_score": 85.0, "tier": "Alta", "label": "≥85% (Alta)", "desc": "Veritiero con assunti programmatici solidi."},
+    {"min_score": 80.0, "tier": "Solida", "label": "≥80% (Solida)", "desc": "Prevalentemente vero con elementi programmatici aperti."},
+    {"min_score": 75.0, "tier": "Buona", "label": "≥75% (Buona)", "desc": "Posizione formalizzata con riscontri parziali."},
+    {"min_score": 70.0, "tier": "Discreta", "label": "≥70% (Discreta)", "desc": "Veridicità moderata con necessità di chiarimento istruttorio."},
+    {"min_score": 65.0, "tier": "Moderata", "label": "≥65% (Moderata)", "desc": "Imprecisioni su dati statistici o parametri temporali."},
+    {"min_score": 60.0, "tier": "Sufficiente", "label": "≥60% (Sufficiente)", "desc": "Numerosi elementi non confermati dalle serie storiche."},
+    {"min_score": 55.0, "tier": "Parziale", "label": "≥55% (Parziale)", "desc": "Bassa aderenza empirica ai vincoli di finanza pubblica."},
+    {"min_score": 50.0, "tier": "Bassa / Esagerato", "label": "≥50% (Bassa / Esagerato)", "desc": "Dichiarazione elettorale con assunti di autofinanziamento non validati."},
+    {"min_score": 45.0, "tier": "Fortemente Forzato", "label": "≥45% (Fortemente Forzato)", "desc": "Assunti economici smentiti da ISTAT o UPB."},
+    {"min_score": 40.0, "tier": "Distorto", "label": "≥40% (Distorto)", "desc": "Rilevanti incongruenze rispetto ai dati ufficiali."},
+    {"min_score": 35.0, "tier": "Disallineato", "label": "≥35% (Disallineato)", "desc": "Contraddetto dalle serie storiche e dai trattati."},
+    {"min_score": 30.0, "tier": "Quasi Infondato", "label": "≥30% (Quasi Infondato)", "desc": "Grave distorsione di dati o vincoli giuridici."},
+    {"min_score": 25.0, "tier": "Gravemente Inesatto", "label": "≥25% (Gravemente Inesatto)", "desc": "Dati smentiti dalle istituzioni competenti."},
+    {"min_score": 20.0, "tier": "Privo di Riscontro", "label": "≥20% (Privo di Riscontro)", "desc": "Totale assenza di basi documentali."},
+    {"min_score": 15.0, "tier": "Inattuabile", "label": "≥15% (Inattuabile)", "desc": "Incompatibilità con norme costituzionali o europee."},
+    {"min_score": 10.0, "tier": "Palesemente Illegittimo", "label": "≥10% (Palesemente Illegittimo)", "desc": "Violazione palese di trattati internazionali."},
+    {"min_score": 5.0, "tier": "Manipolatorio", "label": "≥5% (Manipolatorio)", "desc": "Fatti quasi interamente manipolati."},
+    {"min_score": 0.0, "tier": "Fake / Infondato", "label": "<5% (Fake / Infondato)", "desc": "Falso scientifico, statistico o tecnicamente irrealizzabile."}
+]
+
+def get_truthfulness_tier(score: float) -> Dict[str, Any]:
+    """Returns the descriptive 5%-step tier for any truthfulness score."""
+    for t in TRUTH_THRESHOLDS:
+        if score >= t["min_score"]:
+            return t
+    return TRUTH_THRESHOLDS[-1]
+
 def calculate_proposal_truthfulness_score(status: str) -> float:
     """Returns the pure factual truthfulness score (0.0 to 100.0) based on factual correctness."""
     st = (status or "").strip()

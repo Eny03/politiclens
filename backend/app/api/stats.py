@@ -43,7 +43,7 @@ def get_overview_stats(db: Session = Depends(get_db)):
 
     # 1. Coperture Economiche: Media esatta della percentuale di copertura finanziaria (fondi stanziati / costo totale * 100)
     from app.ai.fiscal_calculator import calculate_financial_coverage_percentage
-    from app.ai.fact_checker import calculate_proposal_truthfulness_score
+    from app.ai.fact_checker import calculate_proposal_truthfulness_score, get_truthfulness_tier, TRUTH_THRESHOLDS
 
     all_cov_scores = [
         calculate_financial_coverage_percentage(p.costo_stimato, p.coperture_dichiarate, p.dichiarazione_sintesi)
@@ -98,6 +98,7 @@ def get_overview_stats(db: Session = Depends(get_db)):
             "poll_percentage": p.poll_percentage or 0.0,
             "poll_trend": p.poll_trend or "stabile",
             "truthfulness_score": p_truth,
+            "truthfulness_tier": get_truthfulness_tier(p_truth),
             "financial_reliability_score": p_fin,
             "proposals_count": p_total
         })
@@ -136,6 +137,7 @@ def get_overview_stats(db: Session = Depends(get_db)):
         average_financial_feasibility=quantified_percentage,
         coalition_truthfulness=coalition_truthfulness,
         party_rankings=party_rankings,
+        truth_thresholds=TRUTH_THRESHOLDS,
         last_ingestion_time=last_ingestion_time,
         last_poll_time=last_poll_time_str,
         benchmarks_summary=benchmarks_summary

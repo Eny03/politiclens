@@ -185,6 +185,7 @@ class StatsOverviewResponse(BaseModel):
     average_financial_feasibility: float = 0.0
     coalition_truthfulness: Dict[str, float] = {}
     party_rankings: List[Dict[str, Any]] = []
+    truth_thresholds: List[Dict[str, Any]] = []
     last_ingestion_time: Optional[datetime] = None
     last_poll_time: Optional[str] = None
     benchmarks_summary: List[InstitutionalBenchmarkSchema]

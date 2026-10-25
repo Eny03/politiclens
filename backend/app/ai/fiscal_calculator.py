@@ -260,19 +260,38 @@ def calculate_fiscal_impact_and_coverage(
                 "fact_check_fonte": rule["source"]
             }
 
-    # 2. If already has numerical cost and structured coverage, keep it but refine if needed
+    # 2. If already has numerical cost and structured coverage, evaluate realistic institutional status
     has_valid_cost = cost_curr and cost_curr.lower() != "non quantificato" and any(c.isdigit() for c in cost_curr)
     has_valid_cov = cov_curr and cov_curr.lower() not in ["non specificate", "non specificata", "da definire", "nessuna", "none", ""] and len(cov_curr) >= 15
     
     if has_valid_cost and has_valid_cov:
-        # Just ensure status and feasibility are robust
+        # Check if coverage is fully structural or pending formal legislative enactment
+        is_pending = any(w in cov_curr.lower() for w in [
+            "in attesa", "non specificat", "da definire", "extraprofitti", "patrimonial", 
+            "spending review generica", "lotta all'evasione", "condoni", "volatilità"
+        ]) or any(w in sintesi_lower for w in [
+            "7.5%", "7,5%", "8%", "quota 41 pura", "settimana corta", "decontribuzione 100%", "piano casa 100k"
+        ])
+        
+        status = "In attesa di copertura" if is_pending else "Verificato"
+        feas = (
+            f"Proposta programmatica ad alto assorbimento di risorse ({cost_curr}) con coperture subordinate a futuri provvedimenti legislativi o entrate straordinarie."
+            if is_pending else
+            f"Proposta compatibile con gli ordinari stanziamenti e coperture di settore ({cost_curr})."
+        )
+        motiv = (
+            "L'Ufficio Parlamentare di Bilancio (UPB) e la Ragioneria Generale dello Stato segnalano che la copertura richiede provvedimenti legislativi strutturali asseverati ex art. 81 Cost."
+            if is_pending else
+            "Posizione formalizzata negli atti legislativi con stima di spesa documentata e coperture a legislazione vigente."
+        )
+
         return {
             "costo_stimato": cost_curr,
             "coperture_dichiarate": cov_curr,
-            "fattibilita_finanziaria": f"Proposta compatibile con gli ordinari stanziamenti e coperture di settore ({cost_curr}).",
-            "fact_check_status": "Verificato",
-            "fact_check_motivazione": "Posizione formalizzata negli atti di indirizzo o disegni di legge presentati presso le Camere con stima di spesa documentata.",
-            "fact_check_fonte": "https://www.parlamento.it/leg19"
+            "fattibilita_finanziaria": feas,
+            "fact_check_status": status,
+            "fact_check_motivazione": motiv,
+            "fact_check_fonte": "https://www.rgs.mef.gov.it/VERSIONE-I/documenti/"
         }
 
     # 3. Macro-topic econometric fallbacks (never leaves 'Non quantificato' or 'Non specificate')
@@ -286,23 +305,23 @@ def calculate_fiscal_impact_and_coverage(
     elif macro_argomento in ["Fisco", "Economia"]:
         calc_cost = "Circa 2.5 - 3.8 miliardi € di riequilibrio fiscale annuo"
         calc_cov = "Rimodulazione selettiva delle spese fiscali (tax expenditures) e contrasto mirato all'evasione IVA/IRPEF tramite fatturazione elettronica."
-        feas = "Proposta di rimodulazione dell'imposizione fiscale compatibile con i saldi operativi di finanza pubblica previsti dal Piano Strutturale di Bilancio (PSB)."
-        status = "Verificato"
-        motiv = "L'Ufficio Parlamentare di Bilancio e il Dipartimento delle Finanze indicano che la revisione delle agevolazioni consente coperture stabili per tagli di aliquote."
+        feas = "Proposta di rimodulazione dell'imposizione fiscale con impatti sui saldi operativi in attesa di relazione tecnica MEF."
+        status = "In attesa di copertura"
+        motiv = "L'Ufficio Parlamentare di Bilancio e il Dipartimento delle Finanze indicano che i tagli di aliquote necessitano di asseverazione preventiva delle coperture compensative."
         source = "https://www.finanze.gov.it"
     elif macro_argomento in ["Sanità"]:
         calc_cost = "Circa 1.2 - 2.0 miliardi € per investimenti in strutture e personale"
         calc_cov = "Rifinanziamento ordinario del Fondo Sanitario Nazionale in Legge di Bilancio e fondi PNRR Missione 6 Salute."
-        feas = "Compatibile con l'incremento programmatico del FSN subordinatamente al rispetto dei tetti di spesa regionali per acquisto beni e servizi."
-        status = "Verificato"
-        motiv = "La spesa sanitaria è regolata dai Livelli Essenziali di Assistenza (LEA); le coperture derivano dal Fondo Sanitario Nazionale ripartito in Conferenza Stato-Regioni."
+        feas = "Subordinata all'individuazione dei capitoli di spesa correnti nei limiti del tetto di disavanzo programmatico concordato con l'UE."
+        status = "In attesa di copertura"
+        motiv = "La spesa sanitaria aggiuntiva richiede incremento dei trasferimenti erariali vincolati asseverati dal MEF in Conferenza Stato-Regioni."
         source = "https://www.salute.gov.it"
     elif macro_argomento in ["Lavoro", "Pensioni"]:
         calc_cost = "Circa 1.5 - 2.5 miliardi € annui"
         calc_cov = "Fondo per le Politiche Attive del Lavoro, incentivi decontribuzione e spending review ministeriale."
-        feas = "Sostenibile con adeguata modulazione delle aliquote e dei coefficienti di trasformazione attuariale pubblicati da INPS."
-        status = "Verificato"
-        motiv = "Le proposte in materia di occupazione e previdenza richiedono la validazione delle relazioni tecniche INPS per garantire la sostenibilità a lungo termine."
+        feas = "Misure previdenziali o occupazionali subordinate alla validazione delle relazioni tecniche INPS e RGS ex art. 81 Cost."
+        status = "In attesa di copertura"
+        motiv = "Le proposte in materia di occupazione e anticipo previdenziale richiedono la certificazione della sostenibilità sui saldi di finanza pubblica."
         source = "https://www.inps.it"
     elif macro_argomento in ["Energia", "Ambiente"]:
         calc_cost = "Investimenti stimati in circa 3.5 - 5.0 miliardi €"

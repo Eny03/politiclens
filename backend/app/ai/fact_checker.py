@@ -113,21 +113,36 @@ def analyze_feasibility_and_factcheck(
         return feasibility, status, motivation, source
 
     # F. Normative and Institutional Proposals (Zero or absorbed direct cost)
-    is_normative = any(k in sintesi_str for k in [
-        "disegno di legge", "ddl", "riforma", "moratoria", "pignorament", "ius scholae",
-        "separazione delle carriere", "csm", "trasparenza", "affitti brevi", "partita iva",
-        "propaganda", "disinformazione", "stop alle armi", "mozione", "tutela", "scuola",
-        "giustizia", "autonomia", "cannabis", "fine vita", "diritti", "decreto", "normativa"
-    ]) or macro_argomento in ["Diritti Civili", "Giustizia", "Istituzioni", "Esteri"]
+    is_pure_normative = (
+        macro_argomento in ["Diritti Civili", "Giustizia", "Istituzioni", "Politica Estera"] or
+        any(k in sintesi_str for k in [
+            "ius scholae", "separazione delle carriere", "csm", "trasparenza", "affitti brevi",
+            "propaganda", "disinformazione", "stop alle armi", "mozione", "tutela",
+            "fine vita", "diritti", "decreto", "normativa", "prescrizione", "carceri"
+        ])
+    ) and not any(k in cost_str for k in ["mld", "miliard", "miliardo"])
 
-    if is_normative:
+    if is_pure_normative:
         status = "Verificato"
         feasibility = "Misura ordinamentale o regolatoria ad invarianza finanziaria diretta per i saldi di finanza pubblica (art. 81 Cost.), con oneri assorbiti dai bilanci di settore."
         motivation = "Intervento normativo depositato presso le Camere o atto di indirizzo politico-parlamentare con relazione tecnica conforme ai vincoli di bilancio."
         source = "https://www.parlamento.it/leg19"
         return feasibility, status, motivation, source
 
-    # G. General Economic/Spending Proposals
+    # G. General Economic/Spending Proposals: Evaluate based on cost and coverage solidity
+    is_costly = any(k in cost_str for k in ["mld", "miliard", "miliardo", "milioni"])
+    is_pending_cov = any(k in coperture_str for k in [
+        "in attesa", "non specificat", "da definire", "extraprofitti", "patrimonial",
+        "spending review generica", "lotta all'evasione", "volatilità", "rimodulazione"
+    ]) or not coperture_str or len(coperture_str) < 15
+
+    if is_costly or is_pending_cov:
+        status = "In attesa di copertura"
+        feasibility = f"Proposta programmatica ad alto impatto economico ({costo_stimato}): la quantificazione è coerente ma le coperture richiedono formale asseverazione MEF/UPB."
+        motivation = "L'Ufficio Parlamentare di Bilancio e la Ragioneria Generale dello Stato segnalano che la misura comporta oneri programmatici in attesa di relazione tecnica ex art. 81 Cost."
+        source = "https://www.rgs.mef.gov.it/VERSIONE-I/documenti/"
+        return feasibility, status, motivation, source
+
     status = "Verificato"
     feasibility = f"Proposta compatibile con gli ordinari stanziamenti e coperture di settore ({costo_stimato})."
     motivation = "Posizione formalizzata negli atti di indirizzo o disegni di legge presentati presso le Camere con stima di spesa documentata."

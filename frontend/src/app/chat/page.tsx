@@ -93,8 +93,30 @@ export default function ChatPage() {
   const [activeSteps, setActiveSteps] = useState<ChatStep[]>([]);
   const [isAccordionOpen, setIsAccordionOpen] = useState(true);
   const [providerLabel, setProviderLabel] = useState<string>("AI Multi-Engine");
+  const [showScrollBottomBtn, setShowScrollBottomBtn] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  const isUserScrollingRef = useRef<boolean>(false);
+
+  const handleScroll = () => {
+    const container = chatContainerRef.current;
+    if (!container) return;
+    const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+    const isScrolledUp = distanceFromBottom > 90;
+    isUserScrollingRef.current = isScrolledUp;
+    setShowScrollBottomBtn(isScrolledUp);
+  };
+
+  const scrollToBottom = (force = false) => {
+    if (force) {
+      isUserScrollingRef.current = false;
+      setShowScrollBottomBtn(false);
+    }
+    if (!isUserScrollingRef.current && chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    }
+  };
 
   // Load chat history from localStorage on client mount
   useEffect(() => {
@@ -132,12 +154,8 @@ export default function ChatPage() {
     }
   }, [messages]);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
   useEffect(() => {
-    scrollToBottom();
+    scrollToBottom(false);
   }, [messages, loading, activeSteps]);
 
   const handleSend = async (textToSend?: string, selectedMode?: string) => {
@@ -158,6 +176,7 @@ export default function ChatPage() {
     setLoading(true);
     setActiveSteps([]);
     setIsAccordionOpen(true);
+    setTimeout(() => scrollToBottom(true), 30);
 
     const assistantMsgId = `assistant-${Date.now()}`;
     let streamedContent = "";
@@ -380,7 +399,11 @@ export default function ChatPage() {
       </div>
 
       {/* Messages Scroll Area */}
-      <div className="flex-1 overflow-y-auto py-4 space-y-4 pr-1">
+      <div 
+        ref={chatContainerRef}
+        onScroll={handleScroll}
+        className="flex-1 overflow-y-auto py-4 space-y-4 pr-1 relative"
+      >
         {messages.map((msg) => (
           <div
             key={msg.id}
@@ -540,6 +563,16 @@ export default function ChatPage() {
               </div>
             )}
           </div>
+        )}
+
+        {showScrollBottomBtn && (
+          <button
+            type="button"
+            onClick={() => scrollToBottom(true)}
+            className="sticky bottom-2 left-1/2 -translate-x-1/2 px-3.5 py-1.5 rounded-full bg-slate-900/90 hover:bg-slate-900 text-white dark:bg-white/95 dark:hover:bg-white dark:text-slate-900 text-xs font-bold shadow-lg transition-all flex items-center gap-1.5 backdrop-blur-xs z-10 mx-auto"
+          >
+            <span>↓ Torna in basso</span>
+          </button>
         )}
 
         <div ref={messagesEndRef} />

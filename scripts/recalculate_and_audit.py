@@ -123,9 +123,22 @@ def audit_and_recalculate_all():
 
         # 2. Ricalcolo esatto delle metriche di ciascun partito
         print("\n[AuditEngine] Ricalcolo metriche analitiche Veridicità e Coperture per tutti i 22 partiti...")
-        parties = db.query(PoliticalParty).order_by(PoliticalParty.poll_percentage.desc()).all()
+        from app.ingestion.poll_tracker import LATEST_POLL_BENCHMARKS
+        parties = db.query(PoliticalParty).all()
         
         for party in parties:
+            p_code = party.code
+            bench = LATEST_POLL_BENCHMARKS.get(p_code)
+            if not bench and p_code == "NOI_MOD":
+                bench = LATEST_POLL_BENCHMARKS.get("NM")
+            elif not bench and p_code == "NM":
+                bench = LATEST_POLL_BENCHMARKS.get("NOI_MOD")
+
+            if bench:
+                party.poll_percentage = bench["base"]
+                party.poll_sources = f"{bench['institutes'][0]} (Rilevazione ufficiale)"
+                party.poll_trend = "stabile"
+
             p_props = db.query(PoliticalProposal).filter(
                 (PoliticalProposal.party_id == party.id) | (PoliticalProposal.partito.ilike(f"%{party.name}%"))
             ).all()
@@ -157,6 +170,9 @@ def audit_and_recalculate_all():
             db_p = parties_db_map.get(code)
             p_copy = dict(p_seed)
             if db_p:
+                p_copy["poll_percentage"] = db_p.poll_percentage
+                p_copy["poll_trend"] = db_p.poll_trend
+                p_copy["poll_sources"] = db_p.poll_sources
                 p_copy["truthfulness_score"] = db_p.truthfulness_score
                 p_copy["financial_reliability_score"] = db_p.financial_reliability_score
                 if db_p.dossier_ai:

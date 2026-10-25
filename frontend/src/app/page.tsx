@@ -392,8 +392,8 @@ function DashboardContent() {
     return true;
   });
 
-  // Recharts Poll Data (Pure Electoral Polls - NO coperture)
-  const pollChartData = filteredRankings.slice(0, 10).map((p) => {
+  // Recharts Poll Data (Pure Electoral Polls - ALL 22 PARTIES)
+  const pollChartData = filteredRankings.map((p) => {
     const partyMatch = parties.find((party) => party.code === p.code || party.name === p.name);
     return {
       name: p.code || p.name.slice(0, 8),
@@ -503,7 +503,7 @@ function DashboardContent() {
             <div className="bg-white dark:bg-slate-900 p-3.5 sm:p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs">
               <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Forze Mappate</div>
               <div className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white mt-0.5">
-                {stats?.total_parties || parties.length || 18}
+                {stats?.total_parties || parties.length || 22}
               </div>
               <p className="text-[10px] text-slate-500 mt-0.5">Parlamentari & civiche</p>
             </div>
@@ -787,10 +787,10 @@ function DashboardContent() {
               <div className="space-y-1">
                 <div className="sm:hidden flex items-center justify-between text-[10px] text-slate-400 dark:text-slate-500 px-1 font-medium">
                   <span>Grafico Barometro Elettorale</span>
-                  <span>← Scorri orizzontalmente per vedere tutti i partiti →</span>
+                  <span>← Scorri orizzontalmente per vedere tutti i {parties.length || 22} partiti →</span>
                 </div>
                 <div className="overflow-x-auto pb-2 scrollbar-thin rounded-xl">
-                  <div className="min-w-[560px] h-80 pt-2">
+                  <div className="min-w-[1200px] h-80 pt-2">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart
                         data={pollChartData}
@@ -810,7 +810,7 @@ function DashboardContent() {
                             if (active && payload && payload.length) {
                               const data = payload[0].payload;
                               return (
-                                <div className="p-3.5 bg-slate-900 text-white rounded-2xl shadow-xl text-xs space-y-2 border border-slate-700 min-w-[210px]">
+                                <div className="p-3.5 bg-slate-900/95 backdrop-blur-md text-white rounded-2xl shadow-xl text-xs space-y-2 border border-slate-700 min-w-[210px] pointer-events-none">
                                   <div className="font-bold text-sm flex items-center gap-2">
                                     <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: data.color }} />
                                     <span>{data.fullName}</span>
@@ -970,7 +970,7 @@ function DashboardContent() {
                   Veridicità e Coperture Finanziarie Partito per Partito
                 </h2>
                 <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-                  Confronto oggettivo e trasparente dei 18 partiti: livello di affidabilità delle dichiarazioni e sostenibilità dei costi rispetto ai vincoli di bilancio dello Stato.
+                  Confronto oggettivo e trasparente dei {parties.length > 0 ? parties.length : 22} partiti: livello di affidabilità delle dichiarazioni e sostenibilità dei costi rispetto ai vincoli di bilancio dello Stato.
                 </p>
               </div>
 
@@ -1118,7 +1118,7 @@ function DashboardContent() {
                 {/* Score filter pills */}
                 <div className="flex items-center gap-1 overflow-x-auto scrollbar-none pb-1 sm:pb-0">
                   {[
-                    { id: "all" as const, label: "Tutti (18)" },
+                    { id: "all" as const, label: `Tutti (${parties.length || 22})` },
                     { id: "high_truth" as const, label: "Veridicità ≥ 75%" },
                     { id: "high_finance" as const, label: "Coperture ≥ 75%" }
                   ].map((f) => (

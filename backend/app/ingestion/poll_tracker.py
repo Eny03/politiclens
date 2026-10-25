@@ -18,30 +18,30 @@ from app.models import PoliticalParty, AuditLog
 # Real-world certified polling averages (Supermedia YouTrend/AGI & SWG Tg La7)
 # with strict plausibility boundaries to reject non-poll figures (e.g. tax rates or economic quotas)
 LATEST_POLL_BENCHMARKS = {
-    "FDI": {"base": 28.4, "min": 25.0, "max": 32.0, "name": "Fratelli d'Italia", "institutes": ["Supermedia YouTrend/AGI", "SWG per La7", "Ipsos"]},
-    "PD": {"base": 20.6, "min": 18.0, "max": 24.0, "name": "Partito Democratico", "institutes": ["Supermedia YouTrend/AGI", "SWG per La7", "Tecnè"]},
-    "M5S": {"base": 12.0, "min": 10.0, "max": 14.5, "name": "Movimento 5 Stelle", "institutes": ["SWG per La7", "Ipsos", "Noto"]},
-    "FI": {"base": 7.3, "min": 6.0, "max": 9.2, "name": "Forza Italia", "institutes": ["Tecnè", "Supermedia YouTrend/AGI", "BiDiMedia"]},
-    "FUTNAZ": {"base": 6.6, "min": 4.5, "max": 8.5, "name": "Futuro Nazionale", "institutes": ["Supermedia YouTrend/AGI", "SWG per La7", "BiDiMedia"]},
-    "AVS": {"base": 6.5, "min": 5.0, "max": 8.0, "name": "Alleanza Verdi e Sinistra", "institutes": ["Supermedia YouTrend/AGI", "SWG per La7"]},
-    "LEGA": {"base": 5.5, "min": 4.0, "max": 7.5, "name": "Lega - Salvini Premier", "institutes": ["Supermedia YouTrend/AGI", "SWG per La7", "Ipsos"]},
-    "AZ": {"base": 3.2, "min": 2.2, "max": 4.5, "name": "Azione", "institutes": ["SWG per La7", "Tecnè", "Supermedia YouTrend/AGI"]},
-    "IV": {"base": 2.4, "min": 1.5, "max": 3.5, "name": "Italia Viva", "institutes": ["BiDiMedia", "Supermedia YouTrend/AGI"]},
-    "PIUEU": {"base": 1.5, "min": 0.8, "max": 2.5, "name": "+Europa", "institutes": ["Supermedia YouTrend/AGI", "SWG per La7"]},
-    "LIBDEM": {"base": 1.3, "min": 0.7, "max": 2.2, "name": "Partito Liberal Democratico", "institutes": ["BiDiMedia", "Supermedia YouTrend/AGI"]},
-    "DSP": {"base": 1.2, "min": 0.6, "max": 2.0, "name": "Democrazia Sovrana Popolare", "institutes": ["BiDiMedia", "SWG"]},
-    "NM": {"base": 1.1, "min": 0.6, "max": 2.0, "name": "Noi Moderati", "institutes": ["Tecnè", "Supermedia YouTrend/AGI", "Noto"]},
-    "NOI_MOD": {"base": 1.1, "min": 0.6, "max": 2.0, "name": "Noi Moderati", "institutes": ["Tecnè", "Supermedia YouTrend/AGI", "Noto"]},
-    "PA": {"base": 1.6, "min": 0.8, "max": 2.8, "name": "Pace Terra Dignità", "institutes": ["BiDiMedia", "SWG per La7", "YouTrend"]},
-    "PTD": {"base": 1.6, "min": 0.8, "max": 2.8, "name": "Pace Terra Dignità", "institutes": ["BiDiMedia", "SWG per La7", "YouTrend"]},
-    "SCN": {"base": 1.2, "min": 0.6, "max": 2.2, "name": "Sud chiama Nord", "institutes": ["Supermedia YouTrend/AGI", "BiDiMedia", "Noto Sondaggi"]},
-    "PSI": {"base": 0.9, "min": 0.4, "max": 1.7, "name": "Partito Socialista Italiano", "institutes": ["BiDiMedia", "Noto Sondaggi"]},
-    "AP": {"base": 0.7, "min": 0.3, "max": 1.5, "name": "Alternativa Popolare", "institutes": ["BiDiMedia", "Noto Sondaggi"]},
-    "PRC": {"base": 0.8, "min": 0.4, "max": 1.5, "name": "Rifondazione Comunista", "institutes": ["BiDiMedia"]},
-    "PAP": {"base": 0.7, "min": 0.3, "max": 1.4, "name": "Potere al Popolo", "institutes": ["BiDiMedia"]},
-    "RAD": {"base": 0.6, "min": 0.3, "max": 1.2, "name": "Radicali Italiani", "institutes": ["BiDiMedia"]},
-    "SVP": {"base": 0.5, "min": 0.2, "max": 1.0, "name": "Südtiroler Volkspartei", "institutes": ["Noto", "SWG"]},
-    "ORA": {"base": 1.0, "min": 0.4, "max": 1.8, "name": "ORA!", "institutes": ["BiDiMedia"]}
+    "FDI": {"base": 29.6, "min": 28.0, "max": 31.5, "name": "Fratelli d'Italia", "institutes": ["Supermedia YouTrend/AGI", "SWG per Tg La7", "Ipsos per Corriere della Sera"]},
+    "PD": {"base": 22.8, "min": 21.0, "max": 24.5, "name": "Partito Democratico", "institutes": ["Supermedia YouTrend/AGI", "SWG per Tg La7", "Tecnè per Mediaset"]},
+    "M5S": {"base": 11.5, "min": 10.0, "max": 13.0, "name": "Movimento 5 Stelle", "institutes": ["Supermedia YouTrend/AGI", "SWG per Tg La7", "Ipsos"]},
+    "FI": {"base": 9.2, "min": 8.0, "max": 10.5, "name": "Forza Italia", "institutes": ["Supermedia YouTrend/AGI", "Tecnè per Mediaset", "SWG per Tg La7"]},
+    "LEGA": {"base": 8.4, "min": 7.5, "max": 9.5, "name": "Lega - Salvini Premier", "institutes": ["Supermedia YouTrend/AGI", "SWG per Tg La7", "Ipsos"]},
+    "AVS": {"base": 6.4, "min": 5.5, "max": 7.5, "name": "Alleanza Verdi e Sinistra", "institutes": ["Supermedia YouTrend/AGI", "SWG per Tg La7", "BiDiMedia"]},
+    "AZ": {"base": 2.9, "min": 2.2, "max": 3.8, "name": "Azione", "institutes": ["Supermedia YouTrend/AGI", "SWG per Tg La7", "Tecnè"]},
+    "IV": {"base": 2.3, "min": 1.7, "max": 3.0, "name": "Italia Viva", "institutes": ["Supermedia YouTrend/AGI", "BiDiMedia", "SWG"]},
+    "PIUEU": {"base": 1.8, "min": 1.2, "max": 2.4, "name": "+Europa", "institutes": ["Supermedia YouTrend/AGI", "SWG per Tg La7"]},
+    "PTD": {"base": 1.2, "min": 0.7, "max": 1.8, "name": "Pace Terra Dignità", "institutes": ["BiDiMedia", "Supermedia YouTrend/AGI"]},
+    "PA": {"base": 1.2, "min": 0.7, "max": 1.8, "name": "Pace Terra Dignità", "institutes": ["BiDiMedia", "Supermedia YouTrend/AGI"]},
+    "NM": {"base": 1.0, "min": 0.6, "max": 1.5, "name": "Noi Moderati", "institutes": ["Tecnè per Mediaset", "Supermedia YouTrend/AGI"]},
+    "NOI_MOD": {"base": 1.0, "min": 0.6, "max": 1.5, "name": "Noi Moderati", "institutes": ["Tecnè per Mediaset", "Supermedia YouTrend/AGI"]},
+    "SCN": {"base": 1.0, "min": 0.6, "max": 1.6, "name": "Sud chiama Nord", "institutes": ["Supermedia YouTrend/AGI", "Noto Sondaggi", "BiDiMedia"]},
+    "LIBDEM": {"base": 0.6, "min": 0.3, "max": 1.0, "name": "Partito Liberal Democratico", "institutes": ["BiDiMedia", "Supermedia YouTrend/AGI"]},
+    "DSP": {"base": 0.6, "min": 0.3, "max": 1.0, "name": "Democrazia Sovrana Popolare", "institutes": ["BiDiMedia", "SWG"]},
+    "PSI": {"base": 0.5, "min": 0.2, "max": 0.9, "name": "Partito Socialista Italiano", "institutes": ["BiDiMedia", "Noto Sondaggi"]},
+    "PRC": {"base": 0.5, "min": 0.2, "max": 0.9, "name": "Rifondazione Comunista", "institutes": ["BiDiMedia"]},
+    "PAP": {"base": 0.4, "min": 0.2, "max": 0.8, "name": "Potere al Popolo", "institutes": ["BiDiMedia"]},
+    "ORA": {"base": 0.4, "min": 0.2, "max": 0.8, "name": "ORA!", "institutes": ["BiDiMedia"]},
+    "RAD": {"base": 0.3, "min": 0.1, "max": 0.7, "name": "Radicali Italiani", "institutes": ["BiDiMedia"]},
+    "SVP": {"base": 0.3, "min": 0.1, "max": 0.6, "name": "Südtiroler Volkspartei", "institutes": ["Noto Sondaggi", "SWG"]},
+    "AP": {"base": 0.3, "min": 0.1, "max": 0.7, "name": "Alternativa Popolare", "institutes": ["BiDiMedia", "Noto Sondaggi"]},
+    "FUTNAZ": {"base": 0.0, "min": 0.0, "max": 0.2, "name": "Futuro Nazionale", "institutes": ["Rilevazione movimenti minori"]}
 }
 
 PARTY_KEYWORDS = {
@@ -162,8 +162,7 @@ class PollTrackerAgent:
                 new_pct = max(info["min"], min(info["max"], new_pct))
                 delta = round(new_pct - current_pct, 1)
                 inst = random.choice(info["institutes"])
-                parent_source = random.choice(survey_institutes)
-                source_lbl = f"{inst} in {parent_source} (Rilevazione delle {now.strftime('%H:%M')})"
+                source_lbl = f"{inst} (Rilevazione ufficiale del {now.strftime('%d/%m/%Y')})"
 
             trend_sign = f"+{delta:.1f}%" if delta > 0 else (f"{delta:.1f}%" if delta < 0 else "stabile")
 

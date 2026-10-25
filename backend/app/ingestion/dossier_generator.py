@@ -424,7 +424,7 @@ def generate_party_dossier(party: PoliticalParty, db: Session) -> Dict[str, Any]
     pending_coverage = sum(1 for p in proposals if p.fact_check_status == "In attesa di copertura")
     exaggerated_count = sum(1 for p in proposals if p.fact_check_status in ["Esagerato", "Fake / Infondato"])
 
-    feasibility_score = round(sum(calculate_proposal_truthfulness_score(p.fact_check_status) for p in proposals) / total_props) if total_props > 0 else 80
+    feasibility_score = round(sum(calculate_proposal_truthfulness_score(p.fact_check_status, getattr(p, "truth_score", None)) for p in proposals) / total_props) if total_props > 0 else 80
 
     # Fetch Specialized Strategic Knowledge Profile for this party
     profile = PARTY_PROFILES_KNOWLEDGE_BASE.get(party.name, None)
@@ -593,7 +593,7 @@ def update_all_party_dossiers(db: Session):
                 (PoliticalProposal.party_id == party.id) | (PoliticalProposal.partito.ilike(f"%{party.name}%"))
             ).all()
             if proposals:
-                party.truthfulness_score = round(sum(calculate_proposal_truthfulness_score(p.fact_check_status) for p in proposals) / len(proposals), 1)
+                party.truthfulness_score = round(sum(calculate_proposal_truthfulness_score(p.fact_check_status, getattr(p, "truth_score", None)) for p in proposals) / len(proposals), 1)
                 party.financial_reliability_score = round(sum(calculate_financial_coverage_percentage(p.costo_stimato, p.coperture_dichiarate, p.dichiarazione_sintesi) for p in proposals) / len(proposals), 1)
         except Exception as e:
             print(f"[DossierGenerator] Error updating dossier for {party.name}: {e}")

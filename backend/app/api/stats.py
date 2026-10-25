@@ -53,7 +53,7 @@ def get_overview_stats(db: Session = Depends(get_db)):
 
     # 2. Indice di Veridicità e Accuratezza Fattuale (Fact-checking puramente scientifico, statistico e fattuale)
     all_truth_scores = [
-        calculate_proposal_truthfulness_score(p.fact_check_status)
+        calculate_proposal_truthfulness_score(p.fact_check_status, getattr(p, "truth_score", None))
         for p in all_proposals
     ]
     avg_truthfulness = round(sum(all_truth_scores) / total_proposals, 1) if total_proposals > 0 else 0.0
@@ -69,7 +69,7 @@ def get_overview_stats(db: Session = Depends(get_db)):
         ).all()
         p_total = len(p_props)
         if p_total > 0:
-            p_truth = round(sum(calculate_proposal_truthfulness_score(pr.fact_check_status) for pr in p_props) / p_total, 1)
+            p_truth = round(sum(calculate_proposal_truthfulness_score(pr.fact_check_status, getattr(pr, "truth_score", None)) for pr in p_props) / p_total, 1)
             p_fin = round(sum(calculate_financial_coverage_percentage(pr.costo_stimato, pr.coperture_dichiarate, pr.dichiarazione_sintesi) for pr in p_props) / p_total, 1)
         else:
             p_truth = p.truthfulness_score or 75.0

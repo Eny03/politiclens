@@ -191,6 +191,7 @@ class ConsensusArbiterAgent:
                 updated_count += 1
             else:
                 # Brand new distinct proposal under this topic
+                from app.ai.fact_checker import calculate_proposal_truthfulness_score
                 new_record = PoliticalProposal(
                     party_id=party_id,
                     partito=p_name,
@@ -203,6 +204,7 @@ class ConsensusArbiterAgent:
                     fact_check_status=item["fact_check_status"],
                     fact_check_motivazione=item["fact_check_motivazione"],
                     fact_check_fonte=item["fact_check_fonte"],
+                    truth_score=calculate_proposal_truthfulness_score(item["fact_check_status"]),
                     fonte_url=item["source_url"],
                     fonte_titolo=item["source_title"],
                     fonte_testata=item["source_name"],

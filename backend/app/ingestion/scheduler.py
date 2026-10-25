@@ -119,6 +119,8 @@ async def run_pipeline_scan():
                     db.add(audit_entry)
                 else:
                     dt = datetime.datetime.fromisoformat(item.timestamp) if item.timestamp else art["published_at"]
+                    from app.ai.fact_checker import calculate_proposal_truthfulness_score
+                    init_truth_score = calculate_proposal_truthfulness_score(item.fact_check.status)
                     proposal_record = PoliticalProposal(
                         party_id=party_id,
                         partito=item.partito,
@@ -131,6 +133,7 @@ async def run_pipeline_scan():
                         fact_check_status=item.fact_check.status,
                         fact_check_motivazione=item.fact_check.motivazione_oggettiva,
                         fact_check_fonte=item.fact_check.fonte_verifica,
+                        truth_score=init_truth_score,
                         fonte_url=item.fonte_url or art["url"],
                         fonte_titolo=art["title"],
                         fonte_testata=art["source_name"],

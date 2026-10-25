@@ -393,6 +393,7 @@ def seed_database_if_empty():
                 fact_check_status="In attesa di copertura",
                 fact_check_motivazione="Proposta programmatica di ORA! per l'efficientamento del servizio sanitario e la riduzione dei tempi d'attesa.",
                 fact_check_fonte="Programma Politico ORA! - Sezione Sanità e Servizi",
+                truth_score=75.0,
                 fonte_url="https://movimento-ora.it",
                 fonte_titolo="Programma Sanità e Liste d'Attesa",
                 fonte_testata="ORA! Ufficio Studi",

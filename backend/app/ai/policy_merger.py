@@ -136,8 +136,10 @@ def merge_or_update_policy_proposal(
         existing.fattibilita_finanziaria = item.impatto_economico.fattibilita_finanziaria
 
     # Update fact-check verification
+    from app.ai.fact_checker import calculate_proposal_truthfulness_score
     if item.fact_check.status:
         existing.fact_check_status = item.fact_check.status
+        existing.truth_score = calculate_proposal_truthfulness_score(item.fact_check.status)
 
     if item.fact_check.motivazione_oggettiva:
         existing.fact_check_motivazione = item.fact_check.motivazione_oggettiva

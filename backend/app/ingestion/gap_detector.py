@@ -418,6 +418,7 @@ async def autonomous_targeted_gap_search(db: Session, max_gaps: int = 6) -> Dict
                         proposals_added_for_topic += 1
                         continue
 
+                    from app.ai.fact_checker import calculate_proposal_truthfulness_score
                     record = PoliticalProposal(
                         party_id=party_id,
                         partito=p_name,
@@ -430,6 +431,7 @@ async def autonomous_targeted_gap_search(db: Session, max_gaps: int = 6) -> Dict
                         fact_check_status=status,
                         fact_check_motivazione=motivazione,
                         fact_check_fonte=fonte_verif,
+                        truth_score=calculate_proposal_truthfulness_score(status),
                         fonte_url=art["url"],
                         fonte_titolo=art["title"] or f"Presa di posizione {p_name} su {topic}",
                         fonte_testata=art.get("source_name", "Ricerca Mirata Web"),
@@ -500,6 +502,7 @@ async def autonomous_targeted_gap_search(db: Session, max_gaps: int = 6) -> Dict
                         gap_filled_for_this_topic = True
                     else:
                         dt = datetime.datetime.fromisoformat(item.timestamp) if item.timestamp else art["published_at"]
+                        from app.ai.fact_checker import calculate_proposal_truthfulness_score
                         new_prop = PoliticalProposal(
                             party_id=party_id,
                             partito=item.partito,
@@ -512,6 +515,7 @@ async def autonomous_targeted_gap_search(db: Session, max_gaps: int = 6) -> Dict
                             fact_check_status=item.fact_check.status,
                             fact_check_motivazione=item.fact_check.motivazione_oggettiva,
                             fact_check_fonte=item.fact_check.fonte_verifica,
+                            truth_score=calculate_proposal_truthfulness_score(item.fact_check.status),
                             fonte_url=item.fonte_url or art["url"],
                             fonte_titolo=art["title"],
                             fonte_testata=art["source_name"],

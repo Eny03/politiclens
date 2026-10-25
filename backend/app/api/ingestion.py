@@ -148,6 +148,7 @@ async def ingest_manual(req: IngestionRequest, db: Session = Depends(get_db)):
             db.commit()
             db.refresh(proposal_record)
         else:
+            from app.ai.fact_checker import calculate_proposal_truthfulness_score
             proposal_record = PoliticalProposal(
                 party_id=party_id,
                 partito=item.partito,
@@ -160,6 +161,7 @@ async def ingest_manual(req: IngestionRequest, db: Session = Depends(get_db)):
                 fact_check_status=item.fact_check.status,
                 fact_check_motivazione=item.fact_check.motivazione_oggettiva,
                 fact_check_fonte=item.fact_check.fonte_verifica,
+                truth_score=calculate_proposal_truthfulness_score(item.fact_check.status),
                 fonte_url=item.fonte_url or url,
                 fonte_titolo=title,
                 fonte_testata="Inserimento Diretto / Scraper",

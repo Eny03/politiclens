@@ -103,7 +103,7 @@ export default function ChatPage() {
     const container = chatContainerRef.current;
     if (!container) return;
     const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
-    const isScrolledUp = distanceFromBottom > 90;
+    const isScrolledUp = distanceFromBottom > 30;
     isUserScrollingRef.current = isScrolledUp;
     setShowScrollBottomBtn(isScrolledUp);
   };
@@ -117,6 +117,49 @@ export default function ChatPage() {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
   };
+
+  // Dedicated wheel and touch listeners to instantly unlock scrolling whenever the user moves up
+  useEffect(() => {
+    const container = chatContainerRef.current;
+    if (!container) return;
+
+    const onWheel = (e: WheelEvent) => {
+      if (e.deltaY < 0) {
+        // User is scrolling upwards: immediately unlock
+        isUserScrollingRef.current = true;
+        setShowScrollBottomBtn(true);
+      } else if (e.deltaY > 0) {
+        const dist = container.scrollHeight - container.scrollTop - container.clientHeight;
+        if (dist <= 30) {
+          isUserScrollingRef.current = false;
+          setShowScrollBottomBtn(false);
+        }
+      }
+    };
+
+    let touchStartY = 0;
+    const onTouchStart = (e: TouchEvent) => {
+      touchStartY = e.touches[0].clientY;
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      const currentY = e.touches[0].clientY;
+      if (currentY > touchStartY + 8) {
+        // User dragged downwards to view older messages: unlock scrolling
+        isUserScrollingRef.current = true;
+        setShowScrollBottomBtn(true);
+      }
+    };
+
+    container.addEventListener("wheel", onWheel, { passive: true });
+    container.addEventListener("touchstart", onTouchStart, { passive: true });
+    container.addEventListener("touchmove", onTouchMove, { passive: true });
+
+    return () => {
+      container.removeEventListener("wheel", onWheel);
+      container.removeEventListener("touchstart", onTouchStart);
+      container.removeEventListener("touchmove", onTouchMove);
+    };
+  }, []);
 
   // Load chat history from localStorage on client mount
   useEffect(() => {
@@ -402,7 +445,7 @@ export default function ChatPage() {
       <div 
         ref={chatContainerRef}
         onScroll={handleScroll}
-        className="flex-1 overflow-y-auto py-4 space-y-4 pr-1 relative"
+        className="flex-1 overflow-y-auto overscroll-contain touch-pan-y py-4 space-y-4 pr-1 relative"
       >
         {messages.map((msg) => (
           <div

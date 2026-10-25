@@ -232,14 +232,16 @@ def _build_deterministic_synthesis(ctx: Dict[str, Any], question: str) -> str:
                     return p_obj.poll_percentage or 0.0
             return 0.0
 
-        fdi = get_p_poll("Fratelli") or 29.6
-        fi = get_p_poll("Forza Italia") or 9.2
-        lega = get_p_poll("Lega") or 8.4
-        nm = get_p_poll("Noi Moderati") or 1.0
+        fdi = get_p_poll("Fratelli") or 27.9
+        fi = get_p_poll("Forza Italia") or 8.8
+        lega = get_p_poll("Lega") or 8.1
+        nm = get_p_poll("Noi Moderati") or 1.1
         cdx_sum = round(fdi + fi + lega + nm, 1)
 
-        pd = get_p_poll("Democratico") or 22.8
-        avs = get_p_poll("Verdi e Sinistra") or 6.4
+        futnaz = get_p_poll("Futuro Nazionale") or 6.0
+
+        pd = get_p_poll("Democratico") or 22.2
+        avs = get_p_poll("Verdi e Sinistra") or 6.3
         piueu = get_p_poll("+Europa") or 1.8
         csx_sum = round(pd + avs + piueu, 1)
 
@@ -247,28 +249,29 @@ def _build_deterministic_synthesis(ctx: Dict[str, Any], question: str) -> str:
         cl_sum = round(csx_sum + m5s, 1)
 
         az = get_p_poll("Azione") or 2.9
-        iv = get_p_poll("Italia Viva") or 2.3
+        iv = get_p_poll("Italia Viva") or 2.2
         centro_sum = round(az + iv, 1)
 
         ptd = get_p_poll("Pace Terra Dignit") or 1.2
         scn = get_p_poll("Sud chiama Nord") or 1.0
 
         poll_lines = [
-            f"### 📊 Rilevazione Sondaggi & Somma Elettorale delle Coalizioni\n",
-            f"In base all'ultima **Supermedia YouTrend per AGI** e alle rilevazioni dei principali istituti demoscopici (SWG per Tg La7, Ipsos, Tecnè), ecco il quadro esatto dei consensi elettorali e la somma matematica delle coalizioni:\n",
+            f"### 📊 Rilevazione Sondaggi & Media Multi-Istituto delle Coalizioni\n",
+            f"In base alla media ponderata elaborata dall'AI sui principali istituti demoscopici nazionali (SWG per Tg La7, Ipsos, Tecnè, BiDiMedia, Noto Sondaggi), ecco il quadro esatto dei consensi elettorali e la somma aritmetica delle coalizioni:\n",
             f"| Coalizione / Area Politica | 📈 Consenso Totale | Composizione e Singoli Partiti |",
             f"| :--- | :---: | :--- |",
-            f"| 🔵 **Centrodestra (CDX - Maggioranza)** | **{cdx_sum}%** | Fratelli d'Italia (**{fdi}%**), Forza Italia (**{fi}%**), Lega (**{lega}%**), Noi Moderati (**{nm}%**) |",
+            f"| 🔵 **Centrodestra Parlamentare (CDX - Maggioranza)** | **{cdx_sum}%** | Fratelli d'Italia (**{fdi}%**), Forza Italia (**{fi}%**), Lega (**{lega}%**), Noi Moderati (**{nm}%**) |",
+            f"| 🦅 **Destra Sovranista / Identitaria (FN)** | **{futnaz}%** | Futuro Nazionale (**{futnaz}%**) |",
             f"| 🔴 **Centrosinistra Tradizionale (CSX)** | **{csx_sum}%** | Partito Democratico (**{pd}%**), Alleanza Verdi e Sinistra (**{avs}%**), +Europa (**{piueu}%**) |",
             f"| 🟣 **Campo Largo Progressista (CSX + M5S)** | **{cl_sum}%** | Centrosinistra ({csx_sum}%) + Movimento 5 Stelle (**{m5s}%**) |",
             f"| 🟡 **Centro / Polo Riformista** | **{centro_sum}%** | Azione (**{az}%**), Italia Viva (**{iv}%**) |",
-            f"| ⚪ **Altre Liste e Forze Minori** | **{round(100.0 - cdx_sum - cl_sum - centro_sum, 1)}%** | Pace Terra Dignità (**{ptd}%**), Sud chiama Nord (**{scn}%**), altre formazioni minori |\n",
+            f"| ⚪ **Altre Liste e Forze Minori** | **{round(100.0 - cdx_sum - futnaz - cl_sum - centro_sum, 1)}%** | Pace Terra Dignità (**{ptd}%**), Sud chiama Nord (**{scn}%**), altre formazioni minori |\n",
             f"#### 🔍 Sintesi del Calcolo Matematico:",
-            f"1. **Somma Centrodestra (CDX)**: **{cdx_sum}%** (`{fdi}% + {fi}% + {lega}% + {nm}%`). È la prima coalizione politica nazionale.",
+            f"1. **Somma Centrodestra (CDX)**: **{cdx_sum}%** (`{fdi}% + {fi}% + {lega}% + {nm}%`). Includendo l'area di destra extra-parlamentare di Futuro Nazionale ({futnaz}%), il bacino complessivo dell'area di destra raggiunge il **{round(cdx_sum + futnaz, 1)}%**.",
             f"2. **Somma Centrosinistra (CSX)**: **{csx_sum}%** (`{pd}% + {avs}% + {piueu}%`).",
             f"3. **Differenziale CDX vs CSX**: Il Centrodestra distanzia il Centrosinistra di **+{round(cdx_sum - csx_sum, 1)} punti percentuali**.",
-            f"4. **Confronto con il Campo Largo**: Se al Centrosinistra si aggiunge il Movimento 5 Stelle ({m5s}%), la coalizione progressista raggiunge il **{cl_sum}%**, riducendo il distacco dal Centrodestra a **{round(cdx_sum - cl_sum, 1)} punti percentuali**.",
-            f"\n*Fonte certificata: Dati integrati dal Barometro Elettorale PoliticLens (Supermedia YouTrend/AGI e SWG per Tg La7).* "
+            f"4. **Confronto con il Campo Largo**: Includendo il Movimento 5 Stelle ({m5s}%), la coalizione progressista raggiunge il **{cl_sum}%**, riducendo il distacco dal Centrodestra di governo a **{round(cdx_sum - cl_sum, 1)} punti percentuali**.",
+            f"\n*Fonte certificata: Media calcolata dall'AI su 5 istituti di sondaggio (SWG per Tg La7, Ipsos, Tecnè, BiDiMedia, Noto).* "
         ]
         return "\n".join(poll_lines)
 

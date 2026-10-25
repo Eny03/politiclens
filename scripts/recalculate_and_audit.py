@@ -9,33 +9,10 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..",
 
 from app.database import SessionLocal, engine
 from app.models import PoliticalParty, PoliticalProposal, AuditLog
-from app.ai.fiscal_calculator import calculate_fiscal_impact_and_coverage
-from app.ai.fact_checker import analyze_feasibility_and_factcheck
+from app.ai.fiscal_calculator import calculate_fiscal_impact_and_coverage, calculate_financial_coverage_percentage
+from app.ai.fact_checker import analyze_feasibility_and_factcheck, calculate_proposal_truthfulness_score
 from app.ingestion.dossier_generator import update_all_party_dossiers
-
-TRUTH_WEIGHTS = {
-    "Verificato": 100.0,
-    "In attesa di copertura": 60.0,
-    "Esagerato": 30.0,
-    "Inattuabile": 0.0,
-    "Fake / Infondato": 0.0,
-    "Non verificabile": 20.0
-}
-
-def evaluate_coverage(p: PoliticalProposal) -> float:
-    cop = (p.coperture_dichiarate or "").strip().lower()
-    cost = (p.costo_stimato or "").strip().lower()
-    st = p.fact_check_status or ""
-    
-    if any(w in cost for w in ["invarianza", "saldo neutro", "costi nulli", "zero costi", "costi operativi nulli"]):
-        return 1.0
-    if st == "Inattuabile":
-        return 0.0
-    if not cop or any(w in cop for w in ["non specificat", "in attesa", "da definire", "non disponibile", "nessuna copertura", "non indicat"]):
-        return 0.0
-    if st == "In attesa di copertura":
-        return 0.5
-    return 1.0
+from app.ingestion.poll_tracker import PollTrackerAgent
 
 def audit_and_recalculate_all():
     db: Session = SessionLocal()
@@ -71,81 +48,43 @@ def audit_and_recalculate_all():
                 p.costo_stimato = f_calc["costo_stimato"]
                 p.coperture_dichiarate = f_calc["coperture_dichiarate"]
                 p.fattibilita_finanziaria = f_calc["fattibilita_finanziaria"]
-                p.fact_check_status = f_calc["fact_check_status"]
-                p.fact_check_motivazione = f_calc["fact_check_motivazione"]
-                p.fact_check_fonte = f_calc["fact_check_fonte"]
                 updated_proposals += 1
 
-            # Controllo di coerenza istituzionale per specifiche proposte ad alto impatto
+            # Controllo di accuratezza fattuale indipendente dalle coperture economiche
             feas, st, mot, src = analyze_feasibility_and_factcheck(
                 partito=p.partito,
                 macro_argomento=p.macro_argomento,
                 sintesi=sintesi,
                 costo_stimato=p.costo_stimato,
-                coperture=p.coperture_dichiarate
+                coperture=p.coperture_dichiarate,
+                raw_text=p.raw_text or ""
             )
-            if st != p.fact_check_status and st in ["Inattuabile", "Esagerato", "In attesa di copertura"]:
-                p.fact_check_status = st
-                p.fattibilita_finanziaria = feas
-                p.fact_check_motivazione = mot
-                p.fact_check_fonte = src
-                updated_proposals += 1
+            p.fact_check_status = st
+            p.fact_check_motivazione = mot
+            p.fact_check_fonte = src
+            updated_proposals += 1
 
         db.commit()
-        print(f"  Aggiornate e armonizzate {updated_proposals} proposte con parametri MEF/ISTAT/UPB.")
+        print(f"  Aggiornate e armonizzate {updated_proposals} proposte con parametri MEF/ISTAT/UPB/IPCC.")
 
-        # Special calibration for newly added parties: ensure balanced and realistic distribution
-        # (NO party should have artificial 100% coverage when relying on programmatic commitments)
-        for p in proposals:
-            s_low = p.dichiarazione_sintesi.lower()
-            # Sud chiama Nord: ZES 100% decontribuzione e emergenza idrica sono programmatiche
-            if p.partito == "Sud chiama Nord":
-                if "zes" in s_low or "decontribuzione" in s_low or "siccità" in s_low or "dighe" in s_low:
-                    p.fact_check_status = "In attesa di copertura"
-                    p.fattibilita_finanziaria = "Proposta programmatica ad alto impatto di finanza pubblica in attesa di DDL asseverato con Relazione Tecnica MEF ex art. 81 Cost."
-            # Pace Terra Dignità: sanità all'8% PIL e uscita fossili 2035
-            elif p.partito == "Pace Terra Dignità":
-                if "8%" in s_low or "sanità" in s_low or "fossili" in s_low:
-                    p.fact_check_status = "In attesa di copertura"
-                    p.fattibilita_finanziaria = "Misura strutturale che presuppone entrate da patrimoniali ed extraprofitti soggette a volatilità di gettito secondo l'UPB."
-            # PSI: piano casa 100k e intramoenia
-            elif p.partito == "Partito Socialista Italiano":
-                if "piano casa" in s_low or "intramoenia" in s_low:
-                    p.fact_check_status = "In attesa di copertura"
-                    p.fattibilita_finanziaria = "Proposta di indirizzo programmatico da incardinare nella Legge di Bilancio pluriennale."
-            # Alternativa Popolare: no tax area 15k e diagnostica serale
-            elif p.partito == "Alternativa Popolare":
-                if "no tax area" in s_low or "diagnostica" in s_low:
-                    p.fact_check_status = "In attesa di copertura"
-                    p.fattibilita_finanziaria = "Misura subordinata all'individuazione preventiva dei capitoli di spending review ministeriale."
+        # 2. Ricalcolo sondaggi multi-istituto guidato dall'AI Poll Tracker
+        print("\n[AuditEngine] Aggregazione sondaggi multi-istituto (SWG, Ipsos, Tecnè, BiDiMedia, Noto) con Futuro Nazionale al ~6.0%...")
+        poll_agent = PollTrackerAgent(db)
+        poll_results = poll_agent.update_all_party_polls()
+        print(f"  Aggiornati sondaggi per {len(poll_results)} partiti.")
 
-        db.commit()
-
-        # 2. Ricalcolo esatto delle metriche di ciascun partito
-        print("\n[AuditEngine] Ricalcolo metriche analitiche Veridicità e Coperture per tutti i 22 partiti...")
-        from app.ingestion.poll_tracker import LATEST_POLL_BENCHMARKS
+        # 3. Ricalcolo metriche analitiche Veridicità e Coperture per tutti i 22 partiti
+        print("\n[AuditEngine] Ricalcolo metriche analitiche Veridicità (fattuale) e Coperture (matematica %)...")
         parties = db.query(PoliticalParty).all()
         
         for party in parties:
-            p_code = party.code
-            bench = LATEST_POLL_BENCHMARKS.get(p_code)
-            if not bench and p_code == "NOI_MOD":
-                bench = LATEST_POLL_BENCHMARKS.get("NM")
-            elif not bench and p_code == "NM":
-                bench = LATEST_POLL_BENCHMARKS.get("NOI_MOD")
-
-            if bench:
-                party.poll_percentage = bench["base"]
-                party.poll_sources = f"{bench['institutes'][0]} (Rilevazione ufficiale)"
-                party.poll_trend = "stabile"
-
             p_props = db.query(PoliticalProposal).filter(
                 (PoliticalProposal.party_id == party.id) | (PoliticalProposal.partito.ilike(f"%{party.name}%"))
             ).all()
             total_n = len(p_props)
             if total_n > 0:
-                t_score = round(sum(TRUTH_WEIGHTS.get(pr.fact_check_status, 50.0) for pr in p_props) / total_n, 1)
-                c_score = round(sum(evaluate_coverage(pr) for pr in p_props) / total_n * 100, 1)
+                t_score = round(sum(calculate_proposal_truthfulness_score(pr.fact_check_status) for pr in p_props) / total_n, 1)
+                c_score = round(sum(calculate_financial_coverage_percentage(pr.costo_stimato, pr.coperture_dichiarate, pr.dichiarazione_sintesi) for pr in p_props) / total_n, 1)
                 party.truthfulness_score = t_score
                 party.financial_reliability_score = c_score
             else:

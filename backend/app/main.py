@@ -70,16 +70,17 @@ def seed_database_if_empty():
                 curr.description = p_data.get("description", curr.description)
                 curr.official_website = p_data.get("official_website", curr.official_website)
                 # Sync certified poll benchmarks and official institutional scores
-                from app.ingestion.poll_tracker import LATEST_POLL_BENCHMARKS
-                bench = LATEST_POLL_BENCHMARKS.get(code)
+                from app.ingestion.poll_tracker import SURVEY_INSTITUTES_OBSERVATIONS
+                bench = SURVEY_INSTITUTES_OBSERVATIONS.get(code)
                 if not bench and code == "NOI_MOD":
-                    bench = LATEST_POLL_BENCHMARKS.get("NM")
+                    bench = SURVEY_INSTITUTES_OBSERVATIONS.get("NM")
                 elif not bench and code == "NM":
-                    bench = LATEST_POLL_BENCHMARKS.get("NOI_MOD")
+                    bench = SURVEY_INSTITUTES_OBSERVATIONS.get("NOI_MOD")
 
                 if bench:
-                    curr.poll_percentage = bench["base"]
-                    curr.poll_sources = f"{bench['institutes'][0]} (Rilevazione ufficiale)"
+                    s_vals = list(bench["surveys"].values())
+                    curr.poll_percentage = round(sum(s_vals) / len(s_vals), 1)
+                    curr.poll_sources = f"Media calcolata dall'AI su {len(s_vals)} istituti ({', '.join(list(bench['surveys'].keys())[:4])})"
                     curr.poll_trend = "stabile"
                 elif p_data.get("poll_percentage") is not None:
                     curr.poll_percentage = p_data["poll_percentage"]
@@ -427,9 +428,9 @@ def seed_database_if_empty():
                 text_str = (p.dichiarazione_sintesi or "").lower()
                 is_formal = any(k in act_str or k in text_str for k in FORMAL_ACT_KEYWORDS)
 
-                # Evaluate public finance impact and fact-check status against institutional criteria
+                # Evaluate public finance impact and factual veracity against institutional criteria
                 from app.ai.fact_checker import analyze_feasibility_and_factcheck
-                from app.ai.fiscal_calculator import calculate_fiscal_impact_and_coverage
+                from app.ai.fiscal_calculator import calculate_fiscal_impact_and_coverage, calculate_financial_coverage_percentage
 
                 if not p.costo_stimato or p.costo_stimato.lower() in ["non quantificato", "non quantificata", "da definire"] or not p.coperture_dichiarate or len(p.coperture_dichiarate) < 15:
                     f_calc = calculate_fiscal_impact_and_coverage(
@@ -442,41 +443,31 @@ def seed_database_if_empty():
                     p.costo_stimato = f_calc["costo_stimato"]
                     p.coperture_dichiarate = f_calc["coperture_dichiarate"]
                     p.fattibilita_finanziaria = f_calc["fattibilita_finanziaria"]
-                    p.fact_check_status = f_calc["fact_check_status"]
-                    p.fact_check_motivazione = f_calc["fact_check_motivazione"]
-                    p.fact_check_fonte = f_calc["fact_check_fonte"]
 
                 feas, st, mot, src = analyze_feasibility_and_factcheck(
                     partito=p.partito,
                     macro_argomento=p.macro_argomento,
                     sintesi=p.dichiarazione_sintesi,
                     costo_stimato=p.costo_stimato,
-                    coperture=p.coperture_dichiarate
+                    coperture=p.coperture_dichiarate,
+                    raw_text=p.raw_text or ""
                 )
-                if st != p.fact_check_status and st in ["Inattuabile", "Esagerato", "In attesa di copertura"]:
-                    p.fact_check_status = st
-                    p.fattibilita_finanziaria = feas
-                    p.fact_check_motivazione = mot
-                    p.fact_check_fonte = src
+                p.fact_check_status = st
+                p.fact_check_motivazione = mot
+                p.fact_check_fonte = src
             db.commit()
 
             # Recalculate and persist realistic party truthfulness and coverage scores
-            TRUTH_WEIGHTS = {
-                "Verificato": 100.0,
-                "In attesa di copertura": 60.0,
-                "Esagerato": 30.0,
-                "Inattuabile": 0.0,
-                "Fake / Infondato": 0.0,
-                "Non verificabile": 20.0
-            }
+            from app.ai.fact_checker import calculate_proposal_truthfulness_score
             for party in db.query(PoliticalParty).all():
                 p_props = db.query(PoliticalProposal).filter(
                     (PoliticalProposal.party_id == party.id) | (PoliticalProposal.partito.ilike(f"%{party.name}%"))
                 ).all()
                 if p_props:
-                    party.truthfulness_score = round(sum(TRUTH_WEIGHTS.get(pr.fact_check_status, 50.0) for pr in p_props) / len(p_props), 1)
+                    party.truthfulness_score = round(sum(calculate_proposal_truthfulness_score(pr.fact_check_status) for pr in p_props) / len(p_props), 1)
+                    party.financial_reliability_score = round(sum(calculate_financial_coverage_percentage(pr.costo_stimato, pr.coperture_dichiarate, pr.dichiarazione_sintesi) for pr in p_props) / len(p_props), 1)
             db.commit()
-            print("[Database] Realistic Art. 81 public finance audit applied cleanly.")
+            print("[Database] Realistic Art. 81 public finance audit and factual veracity applied cleanly.")
         except Exception as fe:
             print(f"[Database] Fiscal audit notice: {fe}")
 

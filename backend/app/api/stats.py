@@ -41,37 +41,22 @@ def get_overview_stats(db: Session = Depends(get_db)):
 
     all_proposals = db.query(PoliticalProposal).all()
 
-    # 1. Coperture Economiche: % ponderata di proposte con copertura finanziaria asseverata o ad invarianza
-    truth_weights = {
-        "Verificato": 100.0,
-        "In attesa di copertura": 60.0,
-        "Esagerato": 30.0,
-        "Inattuabile": 0.0,
-        "Fake / Infondato": 0.0,
-        "Non verificabile": 20.0
-    }
+    # 1. Coperture Economiche: Media esatta della percentuale di copertura finanziaria (fondi stanziati / costo totale * 100)
+    from app.ai.fiscal_calculator import calculate_financial_coverage_percentage
+    from app.ai.fact_checker import calculate_proposal_truthfulness_score
 
-    cov_sum = 0.0
-    for p in all_proposals:
-        cop = (p.coperture_dichiarate or "").strip().lower()
-        cost = (p.costo_stimato or "").strip().lower()
-        st = p.fact_check_status or ""
-        if any(w in cost for w in ["invarianza", "saldo neutro", "costi nulli", "zero costi", "costi operativi nulli"]):
-            cov_sum += 1.0
-        elif st == "Inattuabile":
-            cov_sum += 0.0
-        elif not cop or any(w in cop for w in ["non specificat", "in attesa", "da definire", "non disponibile", "nessuna copertura", "non indicat"]):
-            cov_sum += 0.0
-        elif st == "In attesa di copertura":
-            cov_sum += 0.5
-        else:
-            cov_sum += 1.0
+    all_cov_scores = [
+        calculate_financial_coverage_percentage(p.costo_stimato, p.coperture_dichiarate, p.dichiarazione_sintesi)
+        for p in all_proposals
+    ]
+    quantified_percentage = round(sum(all_cov_scores) / total_proposals, 1) if total_proposals > 0 else 0.0
 
-    quantified_percentage = round((cov_sum / total_proposals * 100), 1) if total_proposals > 0 else 0.0
-
-    # 2. Indice di Veridicità e Accuratezza Fattuale (Fact-checking ponderato)
-    truth_sum = sum(truth_weights.get(p.fact_check_status, 50.0) for p in all_proposals)
-    avg_truthfulness = round(truth_sum / total_proposals, 1) if total_proposals > 0 else 0.0
+    # 2. Indice di Veridicità e Accuratezza Fattuale (Fact-checking puramente scientifico, statistico e fattuale)
+    all_truth_scores = [
+        calculate_proposal_truthfulness_score(p.fact_check_status)
+        for p in all_proposals
+    ]
+    avg_truthfulness = round(sum(all_truth_scores) / total_proposals, 1) if total_proposals > 0 else 0.0
 
     # Coalition truthfulness breakdown
     parties = db.query(PoliticalParty).all()
@@ -84,23 +69,8 @@ def get_overview_stats(db: Session = Depends(get_db)):
         ).all()
         p_total = len(p_props)
         if p_total > 0:
-            p_truth = round(sum(truth_weights.get(pr.fact_check_status, 50.0) for pr in p_props) / p_total, 1)
-            p_cov_sum = 0.0
-            for pr in p_props:
-                cop = (pr.coperture_dichiarate or "").strip().lower()
-                cost = (pr.costo_stimato or "").strip().lower()
-                st = pr.fact_check_status or ""
-                if any(w in cost for w in ["invarianza", "saldo neutro", "costi nulli", "zero costi", "costi operativi nulli"]):
-                    p_cov_sum += 1.0
-                elif st == "Inattuabile":
-                    p_cov_sum += 0.0
-                elif not cop or any(w in cop for w in ["non specificat", "in attesa", "da definire", "non disponibile", "nessuna copertura", "non indicat"]):
-                    p_cov_sum += 0.0
-                elif st == "In attesa di copertura":
-                    p_cov_sum += 0.5
-                else:
-                    p_cov_sum += 1.0
-            p_fin = round((p_cov_sum / p_total) * 100, 1)
+            p_truth = round(sum(calculate_proposal_truthfulness_score(pr.fact_check_status) for pr in p_props) / p_total, 1)
+            p_fin = round(sum(calculate_financial_coverage_percentage(pr.costo_stimato, pr.coperture_dichiarate, pr.dichiarazione_sintesi) for pr in p_props) / p_total, 1)
         else:
             p_truth = p.truthfulness_score or 75.0
             p_fin = p.financial_reliability_score or 70.0

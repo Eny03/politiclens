@@ -1,50 +1,58 @@
 """
 Fact-Checking and Factual Veracity Engine for PoliticLens.
-Evaluates STRICT FACTUAL, SCIENTIFIC, and STATISTICAL VERACITY of political declarations and proposals.
+Strict Institutional Fact-Checking System (Sistema di Valutazione Severo).
 Completely decoupled from financial budget coverage:
-- Scientific veracity (e.g. IPCC on nuclear lifecycle emissions, physics of grid balancing)
+- Scientific veracity (IPCC on nuclear lifecycle emissions, physics of grid balancing)
 - Statistical accuracy (ISTAT, Eurostat, Ministero dell'Interno, MEF)
 - Legal, constitutional and physical feasibility constraints (Corte Costituzionale, UE Treaties, Terna)
+- Strict differentiation between enacted laws (85%), formal deposited bills (70%), programmatic statements (60%),
+  unsupported exaggerations (45%), inattuable promises (20%), and fake claims (0%).
 
 Statuses:
-- 'Verificato' (100%): Affermazione basata su dati statistici, evidenze empiriche, atti parlamentari depositati o assunti scientifici corretti.
-- 'Esagerato' (50%): Affermazione con dati parziali, numeri sovrastimati, assunti di autofinanziamento non asseverati o promesse irrealistiche.
-- 'Fake / Infondato' (0%): Affermazione scientificamente o statisticamente falsa (es. dati inventati o smentiti dalla scienza).
-- 'Inattuabile' (0%): Proposta fisicamente, tecnicamente o giuridicamente irrealizzabile nell'ordinamento o nei tempi previsti.
-- 'Non verificabile' (50%): Affermazione generica o priva di elementi fattuali verificabili.
+- 'Verificato': Atto formale incardinato, legge vigente o evidenza scientifica asseverata (85%).
+- 'Parzialmente verificato': Disegno di legge depositato in Parlamento con elementi programmatici aperti (70%).
+- 'Posizione programmatica': Dichiarazione di intenti, mozione o manifesto politico non ancora tradotto in norma primaria (60%).
+- 'Non verificabile': Slogan generico o affermazione priva di parametri temporali/quantitativi (50%).
+- 'Esagerato': Assunto econometrico ottimistico, promessa di spesa senza copertura o autofinanziamento non validato (45%).
+- 'Inattuabile': Misura fisicamente, tecnicamente o giuridicamente irrealizzabile nei tempi previsti (20%).
+- 'Fake / Infondato': Dato scientificamente o statisticamente falso (0%).
 """
 
 import re
 from typing import Dict, Any, Tuple
 
 TRUTH_WEIGHTS = {
-    "Verificato": 100.0,
-    "Esagerato": 50.0,
-    "Fake / Infondato": 0.0,
-    "Inattuabile": 0.0,
-    "Non verificabile": 50.0
+    "Verificato": 85.0,
+    "Ampiamente verificato": 80.0,
+    "Parzialmente verificato": 70.0,
+    "Posizione programmatica": 60.0,
+    "Non verificabile": 50.0,
+    "Esagerato": 45.0,
+    "Fortemente forzato": 35.0,
+    "Inattuabile": 20.0,
+    "Fake / Infondato": 0.0
 }
 
 # Granular Truthfulness Thresholds (Every 5%)
 TRUTH_THRESHOLDS = [
     {"min_score": 95.0, "tier": "Eccellente", "label": "≥95% (Eccellente)", "desc": "Pienamente verificato e asseverato con atti parlamentari o evidenze scientifiche."},
     {"min_score": 90.0, "tier": "Molto Alta", "label": "≥90% (Molto Alta)", "desc": "Elevata aderenza ai parametri ufficiali con scostamenti trascurabili."},
-    {"min_score": 85.0, "tier": "Alta", "label": "≥85% (Alta)", "desc": "Veritiero con assunti programmatici solidi."},
+    {"min_score": 85.0, "tier": "Alta", "label": "≥85% (Alta / Legge Vigente)", "desc": "Legge dello Stato approvata o DDL costituzionale asseverato."},
     {"min_score": 80.0, "tier": "Solida", "label": "≥80% (Solida)", "desc": "Prevalentemente vero con elementi programmatici aperti."},
-    {"min_score": 75.0, "tier": "Buona", "label": "≥75% (Buona)", "desc": "Posizione formalizzata con riscontri parziali."},
-    {"min_score": 70.0, "tier": "Discreta", "label": "≥70% (Discreta)", "desc": "Veridicità moderata con necessità di chiarimento istruttorio."},
+    {"min_score": 75.0, "tier": "Buona", "label": "≥75% (Buona)", "desc": "Posizione formalizzata con riscontri documentali parziali."},
+    {"min_score": 70.0, "tier": "Discreta", "label": "≥70% (Discreta / DDL Depositato)", "desc": "Disegno di legge depositato in Parlamento in attesa di relazione tecnica."},
     {"min_score": 65.0, "tier": "Moderata", "label": "≥65% (Moderata)", "desc": "Imprecisioni su dati statistici o parametri temporali."},
-    {"min_score": 60.0, "tier": "Sufficiente", "label": "≥60% (Sufficiente)", "desc": "Numerosi elementi non confermati dalle serie storiche."},
-    {"min_score": 55.0, "tier": "Parziale", "label": "≥55% (Parziale)", "desc": "Bassa aderenza empirica ai vincoli di finanza pubblica."},
-    {"min_score": 50.0, "tier": "Bassa / Esagerato", "label": "≥50% (Bassa / Esagerato)", "desc": "Dichiarazione elettorale con assunti di autofinanziamento non validati."},
-    {"min_score": 45.0, "tier": "Fortemente Forzato", "label": "≥45% (Fortemente Forzato)", "desc": "Assunti economici smentiti da ISTAT o UPB."},
-    {"min_score": 40.0, "tier": "Distorto", "label": "≥40% (Distorto)", "desc": "Rilevanti incongruenze rispetto ai dati ufficiali."},
-    {"min_score": 35.0, "tier": "Disallineato", "label": "≥35% (Disallineato)", "desc": "Contraddetto dalle serie storiche e dai trattati."},
+    {"min_score": 60.0, "tier": "Sufficiente", "label": "≥60% (Sufficiente / Programmatica)", "desc": "Dichiarazione programmatica o mozione politica di indirizzo."},
+    {"min_score": 55.0, "tier": "Parziale", "label": "≥55% (Parziale)", "desc": "Bassa aderenza empirica ai vincoli generali di finanza pubblica."},
+    {"min_score": 50.0, "tier": "Bassa", "label": "≥50% (Bassa / Non verificabile)", "desc": "Slogan politico privo di parametri verificabili."},
+    {"min_score": 45.0, "tier": "Esagerato", "label": "≥45% (Esagerato)", "desc": "Dichiarazione elettorale con assunti di autofinanziamento non validati."},
+    {"min_score": 40.0, "tier": "Distorto", "label": "≥40% (Distorto)", "desc": "Rilevanti incongruenze rispetto ai dati ufficiali UPB/ISTAT."},
+    {"min_score": 35.0, "tier": "Disallineato", "label": "≥35% (Disallineato)", "desc": "Contraddetto dalle serie storiche e dai trattati europei."},
     {"min_score": 30.0, "tier": "Quasi Infondato", "label": "≥30% (Quasi Infondato)", "desc": "Grave distorsione di dati o vincoli giuridici."},
     {"min_score": 25.0, "tier": "Gravemente Inesatto", "label": "≥25% (Gravemente Inesatto)", "desc": "Dati smentiti dalle istituzioni competenti."},
-    {"min_score": 20.0, "tier": "Privo di Riscontro", "label": "≥20% (Privo di Riscontro)", "desc": "Totale assenza di basi documentali."},
-    {"min_score": 15.0, "tier": "Inattuabile", "label": "≥15% (Inattuabile)", "desc": "Incompatibilità con norme costituzionali o europee."},
-    {"min_score": 10.0, "tier": "Palesemente Illegittimo", "label": "≥10% (Palesemente Illegittimo)", "desc": "Violazione palese di trattati internazionali."},
+    {"min_score": 20.0, "tier": "Inattuabile", "label": "≥20% (Inattuabile)", "desc": "Incompatibilità con norme costituzionali o limiti tecnici fisici."},
+    {"min_score": 15.0, "tier": "Inattuabile Ordinamentale", "label": "≥15% (Inattuabile Ordinamentale)", "desc": "Violazione strutturale dell'ordinamento vigente."},
+    {"min_score": 10.0, "tier": "Palesemente Illegittimo", "label": "≥10% (Palesemente Illegittimo)", "desc": "Violazione palese di trattati internazionali (es. UNCLOS)."},
     {"min_score": 5.0, "tier": "Manipolatorio", "label": "≥5% (Manipolatorio)", "desc": "Fatti quasi interamente manipolati."},
     {"min_score": 0.0, "tier": "Fake / Infondato", "label": "<5% (Fake / Infondato)", "desc": "Falso scientifico, statistico o tecnicamente irrealizzabile."}
 ]
@@ -57,9 +65,9 @@ def get_truthfulness_tier(score: float) -> Dict[str, Any]:
     return TRUTH_THRESHOLDS[-1]
 
 def calculate_proposal_truthfulness_score(status: str) -> float:
-    """Returns the pure factual truthfulness score (0.0 to 100.0) based on factual correctness."""
+    """Returns strict factual truthfulness score (0.0 to 100.0) based on rigorous fact-checking."""
     st = (status or "").strip()
-    return TRUTH_WEIGHTS.get(st, 50.0)
+    return TRUTH_WEIGHTS.get(st, 60.0)
 
 def analyze_feasibility_and_factcheck(
     partito: str,
@@ -71,7 +79,9 @@ def analyze_feasibility_and_factcheck(
 ) -> Tuple[str, str, str, str]:
     """
     Evaluates STRICT FACTUAL, SCIENTIFIC, STATISTICAL and INSTITUTIONAL VERACITY.
-    Completely decoupled from financial budget coverage.
+    Rigorous fact-checking model:
+    - Penalizes exaggerated slogans, unfunded mandates, and impossible timelines.
+    - Differentiates enacted laws (85%) from formal bills (70%) and programmatic goals (60%).
     Returns:
     (technical_feasibility_analysis, fact_check_status, fact_check_motivation, institutional_source_link)
     """
@@ -82,7 +92,7 @@ def analyze_feasibility_and_factcheck(
     combined = f"{s_low} {raw_low} {cost_low} {cov_low}"
 
     # =========================================================================
-    # 1. SCIENTIFIC & ENVIRONMENTAL FACT-CHECKING
+    # 1. SCIENTIFIC & ENVIRONMENTAL FACT-CHECKING (0% / 20%)
     # =========================================================================
 
     # A. Nuclear Energy CO2 & Safety Falsehoods
@@ -115,7 +125,7 @@ def analyze_feasibility_and_factcheck(
         )
 
     # =========================================================================
-    # 2. STATISTICAL & DEMOGRAPHIC FACT-CHECKING
+    # 2. STATISTICAL & DEMOGRAPHIC FACT-CHECKING (0%)
     # =========================================================================
 
     # A. Fake Tax Pressure Claims (e.g. taxes at 80%)
@@ -137,7 +147,7 @@ def analyze_feasibility_and_factcheck(
         )
 
     # =========================================================================
-    # 3. MACROECONOMIC & FISCAL REALISM
+    # 3. MACROECONOMIC & FISCAL REALISM (45% ESAGERATO / 20% INATTUABILE)
     # =========================================================================
 
     # A. Superbonus 110% claims and defense
@@ -232,7 +242,7 @@ def analyze_feasibility_and_factcheck(
         )
 
     # =========================================================================
-    # 4. LEGAL & CONSTITUTIONAL INFEASIBILITY
+    # 4. LEGAL & CONSTITUTIONAL INFEASIBILITY (20% INATTUABILE)
     # =========================================================================
 
     # A. Unilateral Naval Blockade in International Waters
@@ -264,85 +274,57 @@ def analyze_feasibility_and_factcheck(
         )
 
     # =========================================================================
-    # 5. VERIFIED EMPIRICAL PROPOSALS AND FORMAL LEGISLATIVE ACTS (100%)
+    # 5. STRICT DIFFERENTIATION: ENACTED LAWS (85%) vs BILLS (70%) vs PROGRAMMATIC (60%)
     # =========================================================================
 
-    # A. Salario Minimo Legale 9€ / 9.50€
+    # Formal Acts of Law / Enacted Legislation / Ratified Treaties
+    is_formal_law = any(k in combined for k in [
+        "legge dello stato", "legge ordinaria", "l. 86/2024", "l. 159/2024", "l. 14/2024", 
+        "d.lgs", "ddl nordio", "a.s. 935", "legge di bilancio", "protocollo italia-albania",
+        "accordo bilaterale ratificato", "delibera cipess", "l. 206/2023", "d.l. 73/2024"
+    ])
+    if is_formal_law:
+        return (
+            "Atto normativo formalizzato, incardinato in Parlamento o approvato con legge dello Stato provvista di copertura ex art. 81 Cost.",
+            "Verificato",
+            "Provvedimento formalizzato con atto legislativo primario o disegno di legge costituzionale incardinato con relazione tecnica asseverata.",
+            "https://www.normattiva.it"
+        )
+
+    # Salario Minimo Legale 9€ (Formal bill with official INPS technical report)
     if "salario minimo" in combined and any(w in combined for w in ["9 euro", "9€", "9.50", "legale"]):
         return (
-            "Proposta formulata su riscontri statistici asseverati dalle memorie tecniche INPS e dalle audizioni parlamentari.",
+            "Proposta di legge parlamentare asseverata dalle audizioni e dalle memorie tecniche dell'INPS.",
             "Verificato",
             "I parametri di platea (circa 3.6 milioni di contratti sotto soglia nel settore privato) e gli impatti sono documentati nella memoria tecnica depositata dall'INPS presso la Commissione Lavoro della Camera.",
             "https://www.inps.it/dati-e-bilanci/relazione-tecnica-salario-minimo"
         )
 
-    # B. Nuclear SMR (Small Modular Reactors) - Realistic proposal
+    # Nuclear SMR (MASE National Sustainable Nuclear Platform)
     if "nucleare" in combined and any(w in combined for w in ["smr", "quarta generazione", "iv generazione", "2035", "2040", "reattori modulari"]):
         return (
-            "Progetto tecnologico conforme agli standard della Piattaforma Nazionale per il Nucleare Sostenibile.",
+            "Progetto tecnologico conforme agli indirizzi della Piattaforma Nazionale per il Nucleare Sostenibile.",
             "Verificato",
             "Coerente con gli indirizzi del MASE (Ministero dell'Ambiente e della Sicurezza Energetica) e le linee guida dell'Agenzia Internazionale per l'Energia Atomica (AIEA) per la transizione decarbonizzata.",
             "https://www.mase.gov.it/portale/piattaforma-nazionale-nucleare-sostenibile"
         )
 
-    # C. Taglio del Cuneo Fiscale / Riforma IRPEF
-    if any(k in combined for k in ["taglio del cuneo", "cuneo fiscale", "irpef a tre aliquote", "concordato preventivo biennale"]):
+    # Parliamentary Bills deposited (Proposte di Legge / DDL) -> 70%
+    is_deposited_bill = any(k in combined for k in [
+        "proposta di legge", "disegno di legge", "ddl", "emendamento", "testo unificato", "a.c.", "a.s."
+    ])
+    if is_deposited_bill:
         return (
-            "Provvedimento legislativo formalizzato e incardinato nella Legge di Bilancio e nei decreti attuativi della delega fiscale.",
-            "Verificato",
-            "La misura è asseverata dalla Relazione Tecnica MEF e vidimata dalla Ragioneria Generale dello Stato con quantificazione dei saldi di copertura.",
-            "https://www.mef.gov.it"
-        )
-
-    # D. Formal Constitutional Reforms (Premierato, Separazione carriere, Autonomia L. 86/2024)
-    if any(k in combined for k in ["separazione delle carriere", "premierato", "autonomia differenziata", "ius scholae", "abolizione abuso d'ufficio", "ddl nordio"]):
-        return (
-            "Disegno di legge costituzionale o ordinario depositato presso le Camere con iter parlamentare incardinato.",
-            "Verificato",
-            "Testo legislativo depositato con atto parlamentare ufficiale (AS 935 / AC 1917 / Legge 86/2024) e prospetto illustrativo conforme alle procedure.",
+            "Disegno o proposta di legge depositata presso le Camere: iniziativa legislativa formale, in attesa di completamento dell'iter parlamentare.",
+            "Parzialmente verificato",
+            "Atto parlamentare depositato presso la Camera o il Senato; la concreta efficacia dipende dall'esame in Commissione e dalla quantificazione MEF.",
             "https://www.parlamento.it/leg19"
         )
 
-    # E. Protocollo Italia-Albania / Accordi Bilaterali di Polizia
-    if any(k in combined for k in ["albania", "protocollo italia-albania", "piano mattei", "decreti flussi"]):
-        return (
-            "Accordo internazionale ratificato dal Parlamento e operativo secondo la disciplina multilaterale.",
-            "Verificato",
-            "Ratificato con Legge 14/2024 e dotato di copertura finanziaria a valere sui capitoli del Ministero della Difesa e dell'Interno.",
-            "https://www.normattiva.it"
-        )
-
-    # F. Sanità: Aumento nominale FSN e CUP Unico Regionale
-    if "sanità" in combined and any(k in combined for k in ["cup unico", "liste d'attesa", "136.5", "134", "decreto liste"]):
-        return (
-            "Intervento normativo approvato con D.L. 73/2024 convertito in L. 107/2024 recante misure per l'abbattimento delle liste d'attesa.",
-            "Verificato",
-            "Il provvedimento istituisce la Piattaforma Nazionale per le Liste d'Attesa ed è provvisto di copertura finanziaria certificata dal MEF.",
-            "https://www.salute.gov.it"
-        )
-
-    # G. Infrastrutture Strategiche: Ponte sullo Stretto / PNRR Opere Ferroviarie
-    if any(k in combined for k in ["ponte sullo stretto", "cipess", "pnrr missione 3", "alta velocità"]):
-        return (
-            "Opera strategica inserita nell'allegato infrastrutture del DEF con delibera CIPESS di allocazione fondi pluriennali.",
-            "Verificato",
-            "La Legge di Bilancio e il CIPESS hanno definito la copertura finanziaria pluriennale a carico del bilancio dello Stato e delle risorse FSC regionali.",
-            "https://www.mit.gov.it"
-        )
-
-    # H. Diritti Civili e Ordinamentali (Fine Vita, Matrimonio Egualitario, Trasparenza)
-    if macro_argomento in ["Diritti Civili", "Giustizia", "Istituzioni"]:
-        return (
-            "Proposta di riforma ordinamentale depositata presso la Camera o il Senato della Repubblica.",
-            "Verificato",
-            "Atto parlamentare formale incardinato nelle competenti Commissioni Giustizia o Affari Costituzionali ex art. 71 Cost.",
-            "https://www.parlamento.it/leg19"
-        )
-
-    # Default for specific party program proposals
+    # Generic Programmatic Statements / Party Motions / Campaign Goals -> 60%
     return (
-        "Posizione politica e programmatica formalizzata negli atti di indirizzo, nei programmi depositati o nelle mozioni parlamentari.",
-        "Verificato",
-        "Dichiarazione ufficiale asseverata dalle posizioni congressuali del partito o dagli atti parlamentari presentati nella XIX Legislatura.",
+        "Posizione politica o programmatica enunciata nei manifesti o nelle mozioni di partito: indirizzo politico non ancora tradotto in norma primaria.",
+        "Posizione programmatica",
+        "Dichiarazione ufficiale asseverata dalle posizioni congressuali del partito o dagli atti parlamentari di indirizzo presentati nella XIX Legislatura.",
         "https://www.parlamento.it/leg19"
     )

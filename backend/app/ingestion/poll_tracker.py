@@ -16,14 +16,14 @@ from typing import Dict, Any, List, Optional
 from sqlalchemy.orm import Session
 from app.models import PoliticalParty, AuditLog
 
-# Multi-institute polling observations across certified institutes as of 25 Ottobre 2026
-# (SWG Tg La7, Supermedia YouTrend/Agi, Ipsos Corriere della Sera, Tecnè Mediaset, BiDiMedia, Noto Sondaggi)
+# Multi-institute polling observations across certified institutes as of 26 Ottobre 2026
+# (SWG Tg La7 del 26/10/2026, Supermedia YouTrend/Agi, Ipsos Corriere della Sera, Tecnè Mediaset, BiDiMedia, Noto Sondaggi)
 SURVEY_INSTITUTES_OBSERVATIONS = {
     "FDI": {
         "name": "Fratelli d'Italia",
         "min": 25.0, "max": 33.0,
         "surveys": {
-            "SWG per Tg La7": 29.7,
+            "SWG per Tg La7": 29.3,
             "Supermedia YouTrend/Agi": 27.9,
             "BiDiMedia": 26.5,
             "Ipsos per Corriere": 28.2,
@@ -34,7 +34,7 @@ SURVEY_INSTITUTES_OBSERVATIONS = {
         "name": "Partito Democratico",
         "min": 18.0, "max": 24.0,
         "surveys": {
-            "SWG per Tg La7": 21.2,
+            "SWG per Tg La7": 20.6,
             "Supermedia YouTrend/Agi": 20.3,
             "BiDiMedia": 20.5,
             "Ipsos per Corriere": 20.8,
@@ -45,7 +45,7 @@ SURVEY_INSTITUTES_OBSERVATIONS = {
         "name": "Movimento 5 Stelle",
         "min": 10.0, "max": 14.5,
         "surveys": {
-            "SWG per Tg La7": 11.8,
+            "SWG per Tg La7": 12.4,
             "Supermedia YouTrend/Agi": 12.1,
             "BiDiMedia": 12.0,
             "Ipsos per Corriere": 12.0,
@@ -56,7 +56,7 @@ SURVEY_INSTITUTES_OBSERVATIONS = {
         "name": "Forza Italia",
         "min": 6.0, "max": 9.5,
         "surveys": {
-            "SWG per Tg La7": 7.2,
+            "SWG per Tg La7": 7.4,
             "Supermedia YouTrend/Agi": 7.3,
             "BiDiMedia": 6.7,
             "Ipsos per Corriere": 7.8,
@@ -78,7 +78,7 @@ SURVEY_INSTITUTES_OBSERVATIONS = {
         "name": "Alleanza Verdi e Sinistra",
         "min": 5.0, "max": 8.0,
         "surveys": {
-            "SWG per Tg La7": 6.4,
+            "SWG per Tg La7": 6.3,
             "Supermedia YouTrend/Agi": 6.5,
             "BiDiMedia": 6.6,
             "Ipsos per Corriere": 6.4,
@@ -89,7 +89,7 @@ SURVEY_INSTITUTES_OBSERVATIONS = {
         "name": "Lega - Salvini Premier",
         "min": 4.5, "max": 7.5,
         "surveys": {
-            "SWG per Tg La7": 5.0,
+            "SWG per Tg La7": 5.4,
             "Supermedia YouTrend/Agi": 5.6,
             "BiDiMedia": 5.4,
             "Ipsos per Corriere": 6.2,
@@ -111,7 +111,7 @@ SURVEY_INSTITUTES_OBSERVATIONS = {
         "name": "Italia Viva",
         "min": 1.5, "max": 3.5,
         "surveys": {
-            "SWG per Tg La7": 2.4,
+            "SWG per Tg La7": 2.3,
             "Supermedia YouTrend/Agi": 2.4,
             "BiDiMedia": 2.0,
             "Ipsos per Corriere": 2.3,
@@ -122,7 +122,7 @@ SURVEY_INSTITUTES_OBSERVATIONS = {
         "name": "+Europa",
         "min": 0.8, "max": 2.5,
         "surveys": {
-            "SWG per Tg La7": 1.3,
+            "SWG per Tg La7": 1.4,
             "Supermedia YouTrend/Agi": 1.4,
             "BiDiMedia": 1.1,
             "Ipsos per Corriere": 1.6,
@@ -311,12 +311,14 @@ class PollTrackerAgent:
             with urllib.request.urlopen(req, timeout=6) as resp:
                 xml_data = resp.read()
                 root = ET.fromstring(xml_data)
-                for it in root.findall(".//item")[:15]:
+                for it in root.findall(".//item")[:25]:
                     title = it.find("title").text if it.find("title") is not None else ""
+                    desc = it.find("description").text if it.find("description") is not None else ""
                     pub = it.find("pubDate").text if it.find("pubDate") is not None else ""
                     link = it.find("link").text if it.find("link") is not None else ""
+                    clean_desc = re.sub(r"<[^>]+>", " ", desc) if desc else ""
                     if title:
-                        articles.append({"title": title, "pubDate": pub, "link": link})
+                        articles.append({"title": title, "desc": clean_desc, "pubDate": pub, "link": link})
         except Exception as e:
             print(f"[PollTrackerAgent] Web search fallback notice: {e}")
         return articles
@@ -331,12 +333,12 @@ class PollTrackerAgent:
         """
         web_articles = self.fetch_live_web_poll_articles()
         now = datetime.datetime.utcnow()
-        today_str = "25/10/2026"
+        today_str = datetime.datetime.now().strftime("%d/%m/%Y")
 
         parsed_from_web = {}
         for art in web_articles:
-            t = art["title"].lower()
-            if not any(pi in t for pi in POLL_INDICATORS):
+            full_text = f"{art['title']} {art.get('desc', '')}".lower()
+            if not any(pi in full_text for pi in POLL_INDICATORS):
                 continue
 
             for code, info in SURVEY_INSTITUTES_OBSERVATIONS.items():
@@ -344,8 +346,8 @@ class PollTrackerAgent:
                     continue
                 kws = PARTY_KEYWORDS.get(code, [])
                 for kw in kws:
-                    pattern = rf"{re.escape(kw)}[^\d%]{{0,25}}(?:al|a)?\s*(\d+[.,]\d+)%"
-                    m = re.search(pattern, t)
+                    pattern = rf"{re.escape(kw)}[^\d%]{{0,35}}(?:al|a|raggiunge il|sale al|scende al)?\s*(\d+[.,]\d+)%"
+                    m = re.search(pattern, full_text)
                     if m:
                         try:
                             val = float(m.group(1).replace(",", "."))
@@ -473,7 +475,7 @@ class PollTrackerAgent:
                 old_value=f"Rilevazione precedente per {len(updated_records)} partiti",
                 new_value="; ".join(summary_lines[:8]) + f" (+altri {len(updated_records)-8})",
                 agent_responsible="PollTrackerAgent",
-                details=f"Media aritmetica/ponderata elaborata dall'AI su 6 istituti (SWG per Tg La7, Supermedia YouTrend/Agi, BiDiMedia, Ipsos, Tecnè, Noto) per tutti i {len(updated_records)} partiti al 25/10/2026.",
+                details=f"Media aritmetica/ponderata elaborata dall'AI su 6 istituti (SWG per Tg La7, Supermedia YouTrend/Agi, BiDiMedia, Ipsos, Tecnè, Noto) per tutti i {len(updated_records)} partiti al {now.strftime('%d/%m/%Y')}.",
                 timestamp=now
             )
             try:

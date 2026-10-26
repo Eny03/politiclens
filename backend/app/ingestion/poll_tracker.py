@@ -486,3 +486,9 @@ class PollTrackerAgent:
                 print(f"[PollTrackerAgent] AuditLog commit error: {e}")
 
         return updated_records
+
+def run_poll_tracker_pipeline(db: Session) -> List[Dict[str, Any]]:
+    """Standalone entrypoint for running the automated AI PollTrackerAgent."""
+    agent = PollTrackerAgent(db)
+    return agent.update_all_party_polls()
+

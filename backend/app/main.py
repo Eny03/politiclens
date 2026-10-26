@@ -86,7 +86,9 @@ def seed_database_if_empty():
                     s_vals = list(bench["surveys"].values())
                     curr.poll_percentage = round(sum(s_vals) / len(s_vals), 1)
                     curr.poll_sources = f"Media calcolata dall'AI su {len(s_vals)} istituti ({', '.join(list(bench['surveys'].keys())[:4])})"
-                    curr.poll_trend = "stabile"
+                    prev_w = bench.get("previous_wave", curr.poll_percentage)
+                    d = round(curr.poll_percentage - prev_w, 1)
+                    curr.poll_trend = f"+{d:.1f}%" if d > 0 else (f"{d:.1f}%" if d < 0 else "stabile")
                 elif p_data.get("poll_percentage") is not None:
                     curr.poll_percentage = p_data["poll_percentage"]
                 if p_data.get("truthfulness_score") is not None:

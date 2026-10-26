@@ -21,9 +21,10 @@ from app.models import PoliticalParty, AuditLog
 SURVEY_INSTITUTES_OBSERVATIONS = {
     "FDI": {
         "name": "Fratelli d'Italia",
+        "previous_wave": 27.6,
         "min": 25.0, "max": 33.0,
         "surveys": {
-            "SWG per Tg La7": 29.3,
+            "SWG per Tg La7 (26/10)": 29.3,
             "Supermedia YouTrend/Agi": 27.9,
             "BiDiMedia": 26.5,
             "Ipsos per Corriere": 28.2,
@@ -32,9 +33,10 @@ SURVEY_INSTITUTES_OBSERVATIONS = {
     },
     "PD": {
         "name": "Partito Democratico",
+        "previous_wave": 20.6,
         "min": 18.0, "max": 24.0,
         "surveys": {
-            "SWG per Tg La7": 20.6,
+            "SWG per Tg La7 (26/10)": 20.6,
             "Supermedia YouTrend/Agi": 20.3,
             "BiDiMedia": 20.5,
             "Ipsos per Corriere": 20.8,
@@ -43,9 +45,10 @@ SURVEY_INSTITUTES_OBSERVATIONS = {
     },
     "M5S": {
         "name": "Movimento 5 Stelle",
+        "previous_wave": 11.5,
         "min": 10.0, "max": 14.5,
         "surveys": {
-            "SWG per Tg La7": 12.4,
+            "SWG per Tg La7 (26/10)": 12.4,
             "Supermedia YouTrend/Agi": 12.1,
             "BiDiMedia": 12.0,
             "Ipsos per Corriere": 12.0,
@@ -54,9 +57,10 @@ SURVEY_INSTITUTES_OBSERVATIONS = {
     },
     "FI": {
         "name": "Forza Italia",
+        "previous_wave": 7.5,
         "min": 6.0, "max": 9.5,
         "surveys": {
-            "SWG per Tg La7": 7.4,
+            "SWG per Tg La7 (26/10)": 7.4,
             "Supermedia YouTrend/Agi": 7.3,
             "BiDiMedia": 6.7,
             "Ipsos per Corriere": 7.8,
@@ -65,9 +69,10 @@ SURVEY_INSTITUTES_OBSERVATIONS = {
     },
     "FUTNAZ": {
         "name": "Futuro Nazionale",
+        "previous_wave": 5.9,
         "min": 4.5, "max": 8.5,
         "surveys": {
-            "SWG per Tg La7": 5.6,
+            "SWG per Tg La7 (26/10)": 5.6,
             "Supermedia YouTrend/Agi": 6.8,
             "BiDiMedia": 7.2,
             "Ipsos per Corriere": 6.0,
@@ -76,9 +81,10 @@ SURVEY_INSTITUTES_OBSERVATIONS = {
     },
     "AVS": {
         "name": "Alleanza Verdi e Sinistra",
+        "previous_wave": 6.2,
         "min": 5.0, "max": 8.0,
         "surveys": {
-            "SWG per Tg La7": 6.3,
+            "SWG per Tg La7 (26/10)": 6.3,
             "Supermedia YouTrend/Agi": 6.5,
             "BiDiMedia": 6.6,
             "Ipsos per Corriere": 6.4,
@@ -87,9 +93,10 @@ SURVEY_INSTITUTES_OBSERVATIONS = {
     },
     "LEGA": {
         "name": "Lega - Salvini Premier",
+        "previous_wave": 6.0,
         "min": 4.5, "max": 7.5,
         "surveys": {
-            "SWG per Tg La7": 5.4,
+            "SWG per Tg La7 (26/10)": 5.4,
             "Supermedia YouTrend/Agi": 5.6,
             "BiDiMedia": 5.4,
             "Ipsos per Corriere": 6.2,
@@ -98,9 +105,10 @@ SURVEY_INSTITUTES_OBSERVATIONS = {
     },
     "AZ": {
         "name": "Azione",
+        "previous_wave": 3.0,
         "min": 2.0, "max": 4.5,
         "surveys": {
-            "SWG per Tg La7": 3.1,
+            "SWG per Tg La7 (26/10)": 3.1,
             "Supermedia YouTrend/Agi": 3.3,
             "BiDiMedia": 3.0,
             "Ipsos per Corriere": 3.1,
@@ -109,9 +117,10 @@ SURVEY_INSTITUTES_OBSERVATIONS = {
     },
     "IV": {
         "name": "Italia Viva",
+        "previous_wave": 2.3,
         "min": 1.5, "max": 3.5,
         "surveys": {
-            "SWG per Tg La7": 2.3,
+            "SWG per Tg La7 (26/10)": 2.3,
             "Supermedia YouTrend/Agi": 2.4,
             "BiDiMedia": 2.0,
             "Ipsos per Corriere": 2.3,
@@ -120,9 +129,10 @@ SURVEY_INSTITUTES_OBSERVATIONS = {
     },
     "PIUEU": {
         "name": "+Europa",
+        "previous_wave": 1.4,
         "min": 0.8, "max": 2.5,
         "surveys": {
-            "SWG per Tg La7": 1.4,
+            "SWG per Tg La7 (26/10)": 1.4,
             "Supermedia YouTrend/Agi": 1.4,
             "BiDiMedia": 1.1,
             "Ipsos per Corriere": 1.6,
@@ -131,20 +141,22 @@ SURVEY_INSTITUTES_OBSERVATIONS = {
     },
     "SCN": {
         "name": "Sud chiama Nord",
+        "previous_wave": 1.1,
         "min": 0.7, "max": 2.0,
         "surveys": {
             "BiDiMedia": 1.4,
-            "SWG per Tg La7": 1.0,
+            "SWG per Tg La7 (26/10)": 1.0,
             "YouTrend per Agi": 1.1,
             "Noto Sondaggi": 1.2
         }
     },
     "NM": {
         "name": "Noi Moderati",
+        "previous_wave": 1.1,
         "min": 0.6, "max": 2.0,
         "surveys": {
             "Supermedia YouTrend/Agi": 1.1,
-            "SWG per Tg La7": 1.0,
+            "SWG per Tg La7 (26/10)": 1.0,
             "Tecnè per Mediaset": 1.2,
             "BiDiMedia": 1.0,
             "Noto Sondaggi": 1.1
@@ -152,10 +164,11 @@ SURVEY_INSTITUTES_OBSERVATIONS = {
     },
     "NOI_MOD": {
         "name": "Noi Moderati",
+        "previous_wave": 1.1,
         "min": 0.6, "max": 2.0,
         "surveys": {
             "Supermedia YouTrend/Agi": 1.1,
-            "SWG per Tg La7": 1.0,
+            "SWG per Tg La7 (26/10)": 1.0,
             "Tecnè per Mediaset": 1.2,
             "BiDiMedia": 1.0,
             "Noto Sondaggi": 1.1
@@ -163,26 +176,29 @@ SURVEY_INSTITUTES_OBSERVATIONS = {
     },
     "PTD": {
         "name": "Pace Terra Dignità",
+        "previous_wave": 0.8,
         "min": 0.5, "max": 1.8,
         "surveys": {
             "BiDiMedia": 0.8,
-            "SWG per Tg La7": 0.9,
+            "SWG per Tg La7 (26/10)": 0.9,
             "Noto Sondaggi": 0.8,
             "Ipsos per Corriere": 0.8
         }
     },
     "PA": {
         "name": "Pace Terra Dignità",
+        "previous_wave": 0.8,
         "min": 0.5, "max": 1.8,
         "surveys": {
             "BiDiMedia": 0.8,
-            "SWG per Tg La7": 0.9,
+            "SWG per Tg La7 (26/10)": 0.9,
             "Noto Sondaggi": 0.8,
             "Ipsos per Corriere": 0.8
         }
     },
     "DSP": {
         "name": "Democrazia Sovrana Popolare",
+        "previous_wave": 0.7,
         "min": 0.3, "max": 1.5,
         "surveys": {
             "BiDiMedia": 0.7,
@@ -192,6 +208,7 @@ SURVEY_INSTITUTES_OBSERVATIONS = {
     },
     "LIBDEM": {
         "name": "Partito Liberal Democratico",
+        "previous_wave": 0.6,
         "min": 0.3, "max": 1.5,
         "surveys": {
             "BiDiMedia": 0.6,
@@ -201,6 +218,7 @@ SURVEY_INSTITUTES_OBSERVATIONS = {
     },
     "SVP": {
         "name": "Südtiroler Volkspartei",
+        "previous_wave": 0.5,
         "min": 0.3, "max": 1.0,
         "surveys": {
             "SWG": 0.5,
@@ -210,6 +228,7 @@ SURVEY_INSTITUTES_OBSERVATIONS = {
     },
     "AP": {
         "name": "Alternativa Popolare",
+        "previous_wave": 0.5,
         "min": 0.2, "max": 1.0,
         "surveys": {
             "BiDiMedia": 0.5,
@@ -219,6 +238,7 @@ SURVEY_INSTITUTES_OBSERVATIONS = {
     },
     "PAP": {
         "name": "Potere al Popolo",
+        "previous_wave": 0.4,
         "min": 0.2, "max": 0.9,
         "surveys": {
             "BiDiMedia": 0.4,
@@ -228,6 +248,7 @@ SURVEY_INSTITUTES_OBSERVATIONS = {
     },
     "PRC": {
         "name": "Rifondazione Comunista",
+        "previous_wave": 0.4,
         "min": 0.2, "max": 0.9,
         "surveys": {
             "BiDiMedia": 0.4,
@@ -237,6 +258,7 @@ SURVEY_INSTITUTES_OBSERVATIONS = {
     },
     "RAD": {
         "name": "Radicali Italiani",
+        "previous_wave": 0.4,
         "min": 0.2, "max": 0.9,
         "surveys": {
             "BiDiMedia": 0.4,
@@ -246,6 +268,7 @@ SURVEY_INSTITUTES_OBSERVATIONS = {
     },
     "PSI": {
         "name": "Partito Socialista Italiano",
+        "previous_wave": 0.4,
         "min": 0.2, "max": 0.9,
         "surveys": {
             "BiDiMedia": 0.4,
@@ -255,6 +278,7 @@ SURVEY_INSTITUTES_OBSERVATIONS = {
     },
     "ORA": {
         "name": "ORA!",
+        "previous_wave": 0.3,
         "min": 0.1, "max": 0.8,
         "surveys": {
             "BiDiMedia": 0.3,
@@ -392,8 +416,8 @@ class PollTrackerAgent:
             normalized_pct = round(raw_means[code] * norm_factor, 1)
 
             curr_party = existing_parties.get(code)
-            current_pct = curr_party.poll_percentage if (curr_party and curr_party.poll_percentage) else normalized_pct
-            delta = round(normalized_pct - current_pct, 1)
+            prev_wave = info.get("previous_wave", curr_party.poll_percentage if (curr_party and curr_party.poll_percentage) else normalized_pct)
+            delta = round(normalized_pct - prev_wave, 1)
             trend_sign = f"+{delta:.1f}%" if delta > 0 else (f"{delta:.1f}%" if delta < 0 else "stabile")
 
             res_entry = {

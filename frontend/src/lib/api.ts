@@ -380,5 +380,110 @@ export async function triggerPollUpdate(): Promise<{ status: string; message: st
   return res.json();
 }
 
+// -------------------------------------------------------------
+// Admin & Visitor Telemetry (Accesso Esclusivo per Questo PC)
+// -------------------------------------------------------------
+
+export interface VisitorStatsResponse {
+  online_now_count: number;
+  today_visitors_count: number;
+  total_visitors_count: number;
+  total_page_views: number;
+  device_breakdown: Record<string, number>;
+  browser_breakdown: Record<string, number>;
+  os_breakdown: Record<string, number>;
+  top_paths: { path: string; count: number }[];
+  server_time: string;
+}
+
+export interface VisitorIPItem {
+  ip_address: string;
+  first_seen: string | null;
+  last_seen: string | null;
+  is_online_now: boolean;
+  total_visits: number;
+  device_type: string;
+  browser: string;
+  os_name: string;
+  country?: string | null;
+  last_path: string;
+  recent_paths: string[];
+}
+
+export interface VisitorListResponse {
+  total_records: number;
+  filter_applied: string;
+  visitors: VisitorIPItem[];
+}
+
+export async function verifyAdminAccess(token?: string): Promise<{ authorized: boolean; is_localhost: boolean; client_ip: string }> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (token) headers["X-Admin-Token"] = token;
+  const res = await fetch(`${API_BASE_URL}/api/admin/verify`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ secret_key: token || "" })
+  });
+  if (!res.ok) return { authorized: false, is_localhost: false, client_ip: "" };
+  return res.json();
+}
+
+export async function loginAdmin(secretKey: string): Promise<{ success: boolean; token: string; message: string }> {
+  const res = await fetch(`${API_BASE_URL}/api/admin/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ secret_key: secretKey })
+  });
+  if (!res.ok) throw new Error("Chiave di autorizzazione non corretta.");
+  return res.json();
+}
+
+export async function fetchVisitorStats(token?: string): Promise<VisitorStatsResponse> {
+  const headers: Record<string, string> = {};
+  if (token) headers["X-Admin-Token"] = token;
+  const res = await fetch(`${API_BASE_URL}/api/admin/visitors/stats`, {
+    headers,
+    cache: "no-store"
+  });
+  if (!res.ok) {
+    if (res.status === 403) throw new Error("403_FORBIDDEN");
+    throw new Error("Errore nel recupero delle metriche dei visitatori");
+  }
+  return res.json();
+}
+
+export async function fetchVisitorList(
+  params?: { search?: string; filter_type?: string; limit?: number },
+  token?: string
+): Promise<VisitorListResponse> {
+  const query = new URLSearchParams();
+  if (params?.search) query.append("search", params.search);
+  if (params?.filter_type) query.append("filter_type", params.filter_type);
+  if (params?.limit) query.append("limit", params.limit.toString());
+
+  const headers: Record<string, string> = {};
+  if (token) headers["X-Admin-Token"] = token;
+
+  const url = `${API_BASE_URL}/api/admin/visitors/list${query.toString() ? `?${query.toString()}` : ""}`;
+  const res = await fetch(url, { headers, cache: "no-store" });
+  if (!res.ok) {
+    if (res.status === 403) throw new Error("403_FORBIDDEN");
+    throw new Error("Errore nel recupero dell'elenco IP dei visitatori");
+  }
+  return res.json();
+}
+
+export async function clearVisitorLogs(token?: string): Promise<{ success: boolean; deleted_logs: number }> {
+  const headers: Record<string, string> = {};
+  if (token) headers["X-Admin-Token"] = token;
+  const res = await fetch(`${API_BASE_URL}/api/admin/visitors/clear`, {
+    method: "DELETE",
+    headers
+  });
+  if (!res.ok) throw new Error("Errore nella cancellazione dei log visitatori");
+  return res.json();
+}
+
+
 
 

@@ -80,6 +80,14 @@ export function Footer() {
           </div>
           <div className="flex items-center gap-4">
             <span className="text-slate-400">Neutralità Algoritmica Certificata</span>
+            <span className="text-slate-600">•</span>
+            <a
+              href="/admin/visitors"
+              className="text-slate-600 hover:text-slate-400 transition flex items-center gap-1 text-[11px]"
+              title="Pannello Telemetria Riservato (Solo da questo PC)"
+            >
+              Telemetria
+            </a>
           </div>
         </div>
       </div>

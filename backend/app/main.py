@@ -4,7 +4,7 @@ import asyncio
 import datetime
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
@@ -28,6 +28,10 @@ from app.api.chat import router as chat_router
 from app.api.ingestion import router as ingestion_router
 from app.api.stats import router as stats_router
 from app.api.audit import router as audit_router, seed_audit_history_if_empty
+from app.api.admin import router as admin_router
+
+# Ensure all database tables including visitor_logs are created on startup
+Base.metadata.create_all(bind=engine)
 
 
 def seed_database_if_empty():
@@ -579,6 +583,108 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Helper to classify User-Agent for analytics
+def parse_visitor_user_agent(ua_str: str) -> dict:
+    if not ua_str:
+        return {"device_type": "Desktop", "browser": "Altro", "os": "Sconosciuto"}
+    ua_low = ua_str.lower()
+    
+    if "mobile" in ua_low or "android" in ua_low or "iphone" in ua_low:
+        device_type = "Smartphone"
+    elif "ipad" in ua_low or "tablet" in ua_low:
+        device_type = "Tablet"
+    elif "bot" in ua_low or "spider" in ua_low or "crawler" in ua_low or "render" in ua_low:
+        device_type = "Bot / Crawler"
+    else:
+        device_type = "Desktop"
+        
+    if "edg" in ua_low:
+        browser = "Microsoft Edge"
+    elif "chrome" in ua_low and "chromium" not in ua_low:
+        browser = "Google Chrome"
+    elif "firefox" in ua_low:
+        browser = "Mozilla Firefox"
+    elif "safari" in ua_low and "chrome" not in ua_low:
+        browser = "Apple Safari"
+    elif "opera" in ua_low or "opr" in ua_low:
+        browser = "Opera"
+    else:
+        browser = "Altro"
+        
+    if "windows" in ua_low:
+        os_name = "Windows"
+    elif "iphone" in ua_low or "ipad" in ua_low or "ios" in ua_low:
+        os_name = "iOS"
+    elif "android" in ua_low:
+        os_name = "Android"
+    elif "macintosh" in ua_low or "mac os" in ua_low:
+        os_name = "macOS"
+    elif "linux" in ua_low:
+        os_name = "Linux"
+    else:
+        os_name = "Sconosciuto"
+        
+    return {"device_type": device_type, "browser": browser, "os": os_name}
+
+IGNORED_STATIC_EXTENSIONS = (
+    ".js", ".css", ".png", ".jpg", ".jpeg", ".gif", ".svg",
+    ".ico", ".woff", ".woff2", ".ttf", ".map", ".json", ".txt"
+)
+
+# Visitor & Real-Time Telemetry Tracking Middleware
+@app.middleware("http")
+async def visitor_tracking_middleware(request: Request, call_next):
+    response = await call_next(request)
+    
+    path = request.url.path
+    if (
+        path.startswith("/_next") or
+        path.startswith("/api/admin") or
+        path.startswith("/admin") or
+        path == "/api/health" or
+        path.endswith(IGNORED_STATIC_EXTENSIONS)
+    ):
+        return response
+
+    try:
+        from app.api.admin import extract_client_ip
+        from app.database import SessionLocal
+        from app.models import VisitorLog
+        import datetime
+
+        client_ip = extract_client_ip(request)
+        ua_str = request.headers.get("user-agent", "")
+        method = request.method
+        country = request.headers.get("cf-ipcountry")
+
+        def _log_visit():
+            db = SessionLocal()
+            try:
+                ua_info = parse_visitor_user_agent(ua_str)
+                log = VisitorLog(
+                    ip_address=client_ip,
+                    path=path,
+                    method=method,
+                    user_agent=ua_str[:500] if ua_str else None,
+                    device_type=ua_info["device_type"],
+                    browser=ua_info["browser"],
+                    os_name=ua_info["os"],
+                    country=country,
+                    timestamp=datetime.datetime.utcnow()
+                )
+                db.add(log)
+                db.commit()
+            except Exception:
+                db.rollback()
+            finally:
+                db.close()
+
+        asyncio.create_task(asyncio.to_thread(_log_visit))
+    except Exception:
+        pass
+
+    return response
+
 # Include API Routers
 app.include_router(parties_router)
 app.include_router(proposals_router)
@@ -587,6 +693,7 @@ app.include_router(chat_router)
 app.include_router(ingestion_router)
 app.include_router(stats_router)
 app.include_router(audit_router)
+app.include_router(admin_router)
 
 
 @app.get("/api/health")
@@ -648,6 +755,17 @@ if os.path.exists(STATIC_DIR):
     @app.get("/audit")
     async def serve_audit():
         return FileResponse(os.path.join(STATIC_DIR, "audit.html"))
+
+    @app.get("/admin/visitors")
+    async def serve_admin_visitors():
+        admin_file = os.path.join(STATIC_DIR, "admin", "visitors.html")
+        if os.path.exists(admin_file):
+            return FileResponse(admin_file)
+        return FileResponse(os.path.join(STATIC_DIR, "index.html"))
+
+    @app.get("/admin")
+    async def serve_admin():
+        return RedirectResponse(url="/admin/visitors")
 
     @app.get("/")
 

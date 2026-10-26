@@ -28,6 +28,9 @@ class Settings(BaseModel):
     MAX_ARTICLES_PER_FEED: int = int(os.getenv("MAX_ARTICLES_PER_FEED", "5"))
     ENABLE_AUTO_SCHEDULER: bool = os.getenv("ENABLE_AUTO_SCHEDULER", "true").lower() == "true"
     
+    # Admin & Device Access Control (Solo da questo PC)
+    ADMIN_SECRET_KEY: str = os.getenv("ADMIN_SECRET_KEY", "politiclens-admin-2026-pc")
+    
     # Benchmark Parameters (Italia / ISTAT / MEF / Eurostat 2024-2025)
     PIL_NOMINALE_MLD: float = 2120.0        # ~2.120 Mld €
     DEBITO_PUBBLICO_MLD: float = 2950.0     # ~2.950 Mld € (~139% PIL)

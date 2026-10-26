@@ -99,3 +99,18 @@ class AuditLog(Base):
     details = Column(Text, nullable=True)
     timestamp = Column(DateTime, default=datetime.datetime.utcnow, index=True)
 
+class VisitorLog(Base):
+    __tablename__ = "visitor_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    ip_address = Column(String(100), nullable=False, index=True)
+    path = Column(String(500), nullable=False, index=True)
+    method = Column(String(10), default="GET")
+    user_agent = Column(String(500), nullable=True)
+    device_type = Column(String(50), default="Desktop") # "Desktop", "Smartphone", "Tablet", "Bot / Crawler"
+    browser = Column(String(100), default="Altro")       # "Google Chrome", "Mozilla Firefox", "Apple Safari", "Microsoft Edge", "Altro"
+    os_name = Column(String(100), default="Sconosciuto") # "Windows", "macOS", "iOS", "Android", "Linux", "Sconosciuto"
+    country = Column(String(100), nullable=True)
+    timestamp = Column(DateTime, default=datetime.datetime.utcnow, index=True)
+
+

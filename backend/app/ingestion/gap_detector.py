@@ -367,6 +367,13 @@ async def autonomous_targeted_gap_search(db: Session, max_gaps: int = 6) -> Dict
             if not extracted:
                 comm = _extract_gap_policy_commitment(raw_text, p_name, topic, title=art.get("title"))
                 if comm:
+                    from app.ai.proposal_validator import sanitize_and_validate_proposal_statement
+                    val_stmt = sanitize_and_validate_proposal_statement(comm["sintesi"])
+                    if not val_stmt:
+                        print(f"[GapDetector Gatekeeper] Scartata sintesi heuristica non conforme: '{comm['sintesi'][:60]}...'")
+                        continue
+                    comm["sintesi"] = val_stmt
+
                     from app.ai.fiscal_calculator import calculate_fiscal_impact_and_coverage
                     f_calc = calculate_fiscal_impact_and_coverage(
                         partito=p_name,

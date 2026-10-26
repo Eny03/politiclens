@@ -230,6 +230,15 @@ async def run_pipeline_scan():
             except Exception as fe:
                 print(f"[Scheduler] Fiscal audit cycle notice: {fe}")
 
+        # Step 2d: Quality Gatekeeper Auto-Audit (scans and purges non-policy slogans, media brands and headline snippets)
+        try:
+            from app.ai.proposal_validator import purge_and_audit_invalid_proposals
+            purge_res = purge_and_audit_invalid_proposals(db)
+            if purge_res.get("deleted_count") or purge_res.get("cleaned_count"):
+                print(f"[Scheduler Gatekeeper] Audit completato: {purge_res.get('deleted_count')} eliminate, {purge_res.get('cleaned_count')} ripulite.")
+        except Exception as qe:
+            print(f"[Scheduler] Gatekeeper auto-audit notice: {qe}")
+
         # Step 3: Autonomously synthesize and update AI Dossiers for all political parties
         try:
             from app.ingestion.dossier_generator import update_all_party_dossiers

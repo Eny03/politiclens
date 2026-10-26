@@ -20,9 +20,18 @@ ALLOWED_UPPERCASE_ACRONYMS = {
 
 MEDIA_SOURCE_SUFFIXES = [
     r"\s*[-–—|:]\s*(?:https?://[^\s]+|www\.[^\s]+|[a-zA-Z0-9-]+\.(?:it|com|org|net|eu|info|gov))\s*$",
-    r"\s*[-–—|:]\s*(?:quotidiano sanit[àa]|panorama della sanit[àa]|orizzonte scuola(?:\s+notizie)?|il sole 24 ore|ansa|adn?kronos|corriere(?:\s+della sera)?|la repubblica|repubblica|la stampa|il giornale|il fatto quotidiano|il messaggero|open|fanpage|tgcom24|sky tg24|fisac cgil(?:\s+nazionale)?|cgil nazionale|cgil|cisl|uil|confindustria|rainews(?:\s*24)?|agi|adnkronos|askanews|dire|forbes|huffpost|affaritaliani|today|wired|linkiesta|editorialedomani)\s*$",
-    r"\s*[-–—|:]\s*[a-zA-Z0-9\s]{2,25}(?:notizie|news|quotidiano|online|sanit[àa]|today|tg|post|forbes|magazine)\s*$",
+    r"\s*[-–—|:]\s*(?:quifinanza|the\s+watcher\s+post|watcher\s+post|startmag|today(?:\.it)?|romatoday|milanotoday|torinotoday|napolitoday|europatoday|quotidiano\s+sanit[àa]|panorama\s+della\s+sanit[àa]|orizzonte\s+scuola(?:\s+notizie)?|il\s+sole\s+24\s+ore|ansa|adn?kronos|corriere(?:\s+della\s+sera)?|la\s+repubblica|repubblica|la\s+stampa|il\s+giornale|il\s+fatto\s+quotidiano|il\s+messaggero|il\s+tempo|libero(?:\s+quotidiano)?|la\s+verit[àa]|avvenire|open|fanpage|tgcom24|sky\s+tg24|fisac\s+cgil(?:\s+nazionale)?|cgil\s+nazionale|cgil|cisl|uil|confindustria|rainews(?:\s*24)?|agi|adnkronos|askanews|agenzia\s+nova|lapresse|dire|forbes(?:\s+italia)?|huffpost(?:\s+italia)?|affaritaliani|wired(?:\.it)?|linkiesta|editoriale\s+domani|domani|tiscali|italia\s+oggi|wall\s+street\s+italia|milano\s+finanza|teleborsa|globalist(?:\.it)?|il\s+post|notizie\.it|money\.it)\s*$",
+    r"\s*[-–—|:]\s*[a-zA-Z0-9\s]{2,25}(?:notizie|news|quotidiano|online|sanit[àa]|today|tg|post|forbes|magazine|finanza)\s*$",
     r"\s*[-–—|:]\s*[a-zA-Z0-9-]+\.[a-z]{2,4}\s*$"
+]
+
+KNOWN_MEDIA_BRANDS = [
+    r"\bquifinanza\b", r"\bthe\s+watcher\s+post\b", r"\bwatcher\s+post\b", r"\bstartmag\b",
+    r"\btoday\.it\b", r"\bansa\b", r"\badnkronos\b", r"\baskanews\b", r"\bagicoll\b",
+    r"\bsole\s*24\s*ore\b", r"\bcorriere della sera\b", r"\bfatto quotidiano\b",
+    r"\btgcom24\b", r"\bsky\s*tg24\b", r"\brainews24\b", r"\borizzonte scuola\b",
+    r"\bquotidiano sanit[àa]\b", r"\bpanorama della sanit[àa]\b", r"\bmoney\.it\b",
+    r"\bwall street italia\b", r"\bmilano finanza\b", r"\bteleborsa\b"
 ]
 
 NON_POLITICAL_ACTORS = [
@@ -159,7 +168,9 @@ def strip_media_source_suffix(text: Optional[str]) -> str:
         if cleaned == prev:
             break
     # Strip repetitive internal newspaper mentions
-    cleaned = re.sub(r'\s*[-–—]\s*(?:Orizzonte Scuola Notizie|Quotidiano Sanità|Panorama della Sanità)\s*', ' ', cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r'\s*[-–—]\s*(?:quifinanza|the\s+watcher\s+post|watcher\s+post|startmag|today(?:\.it)?|orizzonte\s+scuola(?:\s+notizie)?|quotidiano\s+sanit[àa]|panorama\s+della\s+sanit[àa]|money\.it)\s*', ' ', cleaned, flags=re.IGNORECASE)
+    # Strip journalistic quote soundbites e.g. ': "Li terrorizzeremo noi"' or ': “Serve un miliardo”'
+    cleaned = re.sub(r'[:\-–—]\s*["“«][^"”»]{2,90}["”»]', '', cleaned)
     # Strip any trailing or inline URLs and website domains
     cleaned = re.sub(r'[-–—|:]?\s*(?:https?://\S+|www\.\S+|[a-zA-Z0-9-]+\.(?:it|com|org|net|eu))\b', '', cleaned, flags=re.IGNORECASE).strip()
     cleaned = re.sub(r'\s+', ' ', cleaned).strip()
@@ -170,7 +181,7 @@ def sanitize_and_validate_proposal_statement(text: Optional[str]) -> Optional[st
     Rigorously validates and cleans a political proposal statement.
     Returns the clean, complete statement, or None if the statement is incomplete,
     truncated, a vague political slogan, attributed to non-political actors (unions),
-    contains website URLs, rally event titles, or non-policy journalistic noise.
+    contains website URLs, rally event titles, media brands, or non-policy journalistic noise.
     """
     if not text:
         return None
@@ -188,6 +199,22 @@ def sanitize_and_validate_proposal_statement(text: Optional[str]) -> Optional[st
 
     cleaned_lower = cleaned.lower()
 
+    # Reject known media outlets / press agencies
+    for mb in KNOWN_MEDIA_BRANDS:
+        if re.search(mb, cleaned_lower):
+            return None
+
+    # Reject internal coalition gossip / friction
+    if re.search(r'\b(?:forza italia frena|lega frena|pd frena|m5s frena|frena sulla proposta|scontro nella maggioranza|lite tra alleati)\b', cleaned_lower):
+        return None
+
+    # Reject repeated headline phrase concatenation
+    words = cleaned_lower.split()
+    if len(words) >= 10:
+        first4 = " ".join(words[:4])
+        if first4 in " ".join(words[4:]):
+            return None
+
     # Reject rally, protest, or party mobilization slogans
     if re.search(r'\b(?:mobilitazione|in cento piazze|raccolta firme|sit-in|volantinaggio|tesseramento)\b', cleaned_lower):
         return None
@@ -195,8 +222,6 @@ def sanitize_and_validate_proposal_statement(text: Optional[str]) -> Optional[st
     # 2. Check minimum length for a complete policy proposal
     if len(cleaned) < 30:
         return None
-
-    cleaned_lower = cleaned.lower()
 
     # 3. Discard if attributed primarily to non-political actors (unions, employer guilds, medical orders)
     for actor_pat in NON_POLITICAL_ACTORS:
@@ -266,10 +291,19 @@ def purge_and_audit_invalid_proposals(db) -> dict:
         stmt = (p.dichiarazione_sintesi or "").strip()
         val_stmt = sanitize_and_validate_proposal_statement(stmt)
         
-        has_url = bool(re.search(r"www\.|\.it\b|\.com\b|https?://", stmt, re.I))
+        has_url = bool(re.search(r"https?://|www\.|\.(?:it|com|org|net)\b", stmt, re.I))
         has_rally = bool(re.search(r"\b(mobilitazione|in cento piazze|raccolta firme|sit-in|volantinaggio|tesseramento)\b", stmt, re.I))
+        has_brand = any(re.search(mb, stmt, re.I) for mb in KNOWN_MEDIA_BRANDS)
+        has_friction = bool(re.search(r"\b(forza italia frena|lega frena|pd frena|m5s frena|frena sulla proposta)\b", stmt, re.I))
+        
+        words = stmt.lower().split()
+        has_repetition = False
+        if len(words) >= 10:
+            first4 = " ".join(words[:4])
+            if first4 in " ".join(words[4:]):
+                has_repetition = True
 
-        if not val_stmt or has_url or has_rally:
+        if not val_stmt or has_url or has_rally or has_brand or has_friction or has_repetition:
             deleted.append({"id": p.id, "partito": p.partito, "sintesi": stmt})
             db.add(AuditLog(
                 event_type="cancellazione",
@@ -279,7 +313,7 @@ def purge_and_audit_invalid_proposals(db) -> dict:
                 old_value=stmt[:90] + "..." if len(stmt) > 90 else stmt,
                 new_value=None,
                 agent_responsible="QualityGatekeeperAgent",
-                details=f"Cancellata proposta non conforme alle linee guida di policy: titolo di evento/comunicato stampa con dominio web o slogan non formalizzato ('{stmt}').",
+                details=f"Cancellata proposta non conforme alle linee guida di policy: titolo di evento, citazione giornalistica, brand editoriale o duplicazione ('{stmt}').",
                 timestamp=datetime.datetime.utcnow()
             ))
             db.delete(p)

@@ -459,6 +459,12 @@ async def autonomous_targeted_gap_search(db: Session, max_gaps: int = 6) -> Dict
 
             for item in extracted:
                 if item.partito.lower() in p_name.lower() or p_name.lower() in item.partito.lower():
+                    val_stmt = sanitize_and_validate_proposal_statement(item.dichiarazione_sintesi)
+                    if not val_stmt:
+                        print(f"[GapDetector Gatekeeper] Scartata proposta non conforme: '{item.dichiarazione_sintesi[:60]}...'")
+                        continue
+                    item.dichiarazione_sintesi = val_stmt
+
                     text_to_embed = f"{item.partito} {item.macro_argomento} {item.dichiarazione_sintesi}"
                     emb_list = await get_text_embedding(text_to_embed)
                     emb_json = json.dumps(emb_list) if emb_list else None

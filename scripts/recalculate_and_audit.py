@@ -24,6 +24,12 @@ def audit_and_recalculate_all():
         pass
     db: Session = SessionLocal()
     try:
+        # 0. Autonomous Quality Gatekeeper purge
+        from app.ai.proposal_validator import purge_and_audit_invalid_proposals
+        purge_res = purge_and_audit_invalid_proposals(db)
+        if purge_res["deleted_count"] > 0:
+            print(f"[Quality Gatekeeper] Eliminate {purge_res['deleted_count']} proposte non conformi (slogan / eventi / domini web).")
+
         print("[AuditEngine] Avvio verifica analitica di tutte le proposte nel database...")
         proposals = db.query(PoliticalProposal).all()
         print(f"  Totale proposte da verificare: {len(proposals)}")

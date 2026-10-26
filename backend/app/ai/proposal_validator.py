@@ -19,8 +19,10 @@ ALLOWED_UPPERCASE_ACRONYMS = {
 }
 
 MEDIA_SOURCE_SUFFIXES = [
+    r"\s*[-–—|:]\s*(?:https?://[^\s]+|www\.[^\s]+|[a-zA-Z0-9-]+\.(?:it|com|org|net|eu|info|gov))\s*$",
     r"\s*[-–—|:]\s*(?:quotidiano sanit[àa]|panorama della sanit[àa]|orizzonte scuola(?:\s+notizie)?|il sole 24 ore|ansa|adn?kronos|corriere(?:\s+della sera)?|la repubblica|repubblica|la stampa|il giornale|il fatto quotidiano|il messaggero|open|fanpage|tgcom24|sky tg24|fisac cgil(?:\s+nazionale)?|cgil nazionale|cgil|cisl|uil|confindustria|rainews(?:\s*24)?|agi|adnkronos|askanews|dire|forbes|huffpost|affaritaliani|today|wired|linkiesta|editorialedomani)\s*$",
-    r"\s*[-–—|:]\s*[a-zA-Z0-9\s]{2,25}(?:notizie|news|quotidiano|online|sanit[àa]|today|tg|post|forbes|magazine)\s*$"
+    r"\s*[-–—|:]\s*[a-zA-Z0-9\s]{2,25}(?:notizie|news|quotidiano|online|sanit[àa]|today|tg|post|forbes|magazine)\s*$",
+    r"\s*[-–—|:]\s*[a-zA-Z0-9-]+\.[a-z]{2,4}\s*$"
 ]
 
 NON_POLITICAL_ACTORS = [
@@ -36,6 +38,23 @@ NON_POLICY_HEADLINE_PATTERNS = [
     r"al centro della puntata\b",
     r"al centro del dibattito\b",
     r"al centro dell'attenzione\b",
+    r"al centro della mobilitazione\b",
+    r"al centro della protesta\b",
+    r"al centro della piazza\b",
+    r"in cento piazze\b",
+    r"in piazza per\b",
+    r"scende in piazza\b",
+    r"raccolta firme\b",
+    r"raccolta di firme\b",
+    r"campagna di tesseramento\b",
+    r"gazebo informativi\b",
+    r"volantinaggio\b",
+    r"porta le sue proposte in\b",
+    r"porta le proposte in\b",
+    r"al centro dell'iniziativa\b",
+    r"manifestazione nazionale\b",
+    r"sit-in\b",
+    r"corteo\b",
     r"^[«\"']?\s*(?:è|e')\s+ora\s+di\s+cambiare\b",
     r"^[«\"']?\s*troppi cittadini costretti a\b",
     r"annuncia emendamento per pdl\b",
@@ -141,6 +160,8 @@ def strip_media_source_suffix(text: Optional[str]) -> str:
             break
     # Strip repetitive internal newspaper mentions
     cleaned = re.sub(r'\s*[-–—]\s*(?:Orizzonte Scuola Notizie|Quotidiano Sanità|Panorama della Sanità)\s*', ' ', cleaned, flags=re.IGNORECASE)
+    # Strip any trailing or inline URLs and website domains
+    cleaned = re.sub(r'[-–—|:]?\s*(?:https?://\S+|www\.\S+|[a-zA-Z0-9-]+\.(?:it|com|org|net|eu))\b', '', cleaned, flags=re.IGNORECASE).strip()
     cleaned = re.sub(r'\s+', ' ', cleaned).strip()
     return cleaned
 
@@ -149,7 +170,7 @@ def sanitize_and_validate_proposal_statement(text: Optional[str]) -> Optional[st
     Rigorously validates and cleans a political proposal statement.
     Returns the clean, complete statement, or None if the statement is incomplete,
     truncated, a vague political slogan, attributed to non-political actors (unions),
-    or non-policy journalistic noise.
+    contains website URLs, rally event titles, or non-policy journalistic noise.
     """
     if not text:
         return None
@@ -160,6 +181,16 @@ def sanitize_and_validate_proposal_statement(text: Optional[str]) -> Optional[st
     cleaned = re.sub(r'([”"»])([a-zA-ZÀ-ÿ])', r'\1 \2', cleaned)
     cleaned = re.sub(r'([a-zA-ZÀ-ÿ])([“"«])', r'\1 \2', cleaned)
     cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+
+    # Reject if still contains web addresses, URLs, or domains
+    if re.search(r'www\.|\.it\b|\.com\b|https?://', cleaned, re.IGNORECASE):
+        return None
+
+    cleaned_lower = cleaned.lower()
+
+    # Reject rally, protest, or party mobilization slogans
+    if re.search(r'\b(?:mobilitazione|in cento piazze|raccolta firme|sit-in|volantinaggio|tesseramento)\b', cleaned_lower):
+        return None
 
     # 2. Check minimum length for a complete policy proposal
     if len(cleaned) < 30:
@@ -217,3 +248,52 @@ def sanitize_and_validate_proposal_statement(text: Optional[str]) -> Optional[st
         return None
 
     return cleaned
+
+def purge_and_audit_invalid_proposals(db) -> dict:
+    """
+    Autonomous AI Quality Auditor:
+    Scans the database for invalid proposals (slogans, event titles, web URLs, or unvalidatable phrases).
+    Either cleans/reformulates them or deletes them, recording an audit log entry for transparency.
+    """
+    import datetime
+    from app.models import PoliticalProposal, AuditLog
+
+    all_proposals = db.query(PoliticalProposal).all()
+    deleted = []
+    cleaned = []
+
+    for p in all_proposals:
+        stmt = (p.dichiarazione_sintesi or "").strip()
+        val_stmt = sanitize_and_validate_proposal_statement(stmt)
+        
+        has_url = bool(re.search(r"www\.|\.it\b|\.com\b|https?://", stmt, re.I))
+        has_rally = bool(re.search(r"\b(mobilitazione|in cento piazze|raccolta firme|sit-in|volantinaggio|tesseramento)\b", stmt, re.I))
+
+        if not val_stmt or has_url or has_rally:
+            deleted.append({"id": p.id, "partito": p.partito, "sintesi": stmt})
+            db.add(AuditLog(
+                event_type="cancellazione",
+                entity_type="programma",
+                entity_id=str(p.id),
+                entity_name=f"{p.partito}: {p.macro_argomento}",
+                old_value=stmt[:90] + "..." if len(stmt) > 90 else stmt,
+                new_value=None,
+                agent_responsible="QualityGatekeeperAgent",
+                details=f"Cancellata proposta non conforme alle linee guida di policy: titolo di evento/comunicato stampa con dominio web o slogan non formalizzato ('{stmt}').",
+                timestamp=datetime.datetime.utcnow()
+            ))
+            db.delete(p)
+        elif val_stmt != stmt:
+            cleaned.append({"id": p.id, "old": stmt, "new": val_stmt})
+            p.dichiarazione_sintesi = val_stmt
+
+    if deleted or cleaned:
+        db.commit()
+
+    return {
+        "deleted_count": len(deleted),
+        "deleted": deleted,
+        "cleaned_count": len(cleaned),
+        "cleaned": cleaned
+    }
+

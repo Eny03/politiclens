@@ -58,10 +58,13 @@ async def run_pipeline_scan():
                     continue
                 party_id = party_obj.id
 
-                # Pre-ingestion Quality Gate 2: Must be a concrete policy statement (>15 chars), not gossip or generic text
-                if not item.dichiarazione_sintesi or len(item.dichiarazione_sintesi.strip()) < 15:
-                    print(f"[Ingestion Gatekeeper] Scartata proposta: descrizione troppo breve o generica")
+                # Pre-ingestion Quality Gate 2: Strict Policy Validation (rejects slogans, media headlines, rally events, web domains)
+                from app.ai.proposal_validator import sanitize_and_validate_proposal_statement
+                val_stmt = sanitize_and_validate_proposal_statement(item.dichiarazione_sintesi)
+                if not val_stmt:
+                    print(f"[Ingestion Gatekeeper] Scartata proposta non conforme alle linee guida di policy: '{item.dichiarazione_sintesi[:60]}...'")
                     continue
+                item.dichiarazione_sintesi = val_stmt
 
                 # Pre-ingestion Quality Gate 3: Check against gossip & non-policy keywords
                 from app.ai.extractor import NON_POLICY_PATTERNS

@@ -58,6 +58,17 @@ def get_proposals(
         
     return output
 
+@router.post("/audit-cleanup")
+def run_quality_cleanup(db: Session = Depends(get_db)):
+    """Triggers the QualityGatekeeperAgent to audit and purge invalid proposals, event titles or URL noise."""
+    from app.ai.proposal_validator import purge_and_audit_invalid_proposals
+    res = purge_and_audit_invalid_proposals(db)
+    return {
+        "status": "SUCCESS",
+        "message": f"Bonifica completata: {res['deleted_count']} rimosse, {res['cleaned_count']} riformulate.",
+        "details": res
+    }
+
 @router.get("/{proposal_id}", response_model=PoliticalProposalDetail)
 def get_proposal_by_id(proposal_id: int, db: Session = Depends(get_db)):
     """Returns a single proposal by ID."""
@@ -69,3 +80,29 @@ def get_proposal_by_id(proposal_id: int, db: Session = Depends(get_db)):
     detail = PoliticalProposalDetail.model_validate(p)
     detail.party_color = party.color if party else "#3b82f6"
     return detail
+
+@router.delete("/{proposal_id}")
+def delete_proposal_by_id(proposal_id: int, db: Session = Depends(get_db)):
+    """Deletes an invalid proposal by ID and registers an audit log entry."""
+    from app.models import AuditLog
+    import datetime
+    p = db.query(PoliticalProposal).filter(PoliticalProposal.id == proposal_id).first()
+    if not p:
+        raise HTTPException(status_code=404, detail="Proposta non trovata")
+    
+    stmt = p.dichiarazione_sintesi
+    db.add(AuditLog(
+        event_type="cancellazione",
+        entity_type="programma",
+        entity_id=str(p.id),
+        entity_name=f"{p.partito}: {p.macro_argomento}",
+        old_value=stmt[:90] + "..." if len(stmt) > 90 else stmt,
+        new_value=None,
+        agent_responsible="QualityGatekeeperAgent",
+        details=f"Cancellata proposta non conforme alle linee guida di policy (ID {p.id}): '{stmt}'.",
+        timestamp=datetime.datetime.utcnow()
+    ))
+    db.delete(p)
+    db.commit()
+    return {"success": True, "deleted_id": proposal_id}
+

@@ -410,6 +410,12 @@ def seed_database_if_empty():
         from app.api.audit import sync_audit_with_proposals
         sync_audit_with_proposals(db)
 
+        # Autonomous AI Quality Auditor: Purge any non-compliant proposals, slogans, or event titles
+        from app.ai.proposal_validator import purge_and_audit_invalid_proposals
+        purge_res = purge_and_audit_invalid_proposals(db)
+        if purge_res["deleted_count"] > 0 or purge_res["cleaned_count"] > 0:
+            print(f"[Quality Gatekeeper] Auto-purge: {purge_res['deleted_count']} rimosse, {purge_res['cleaned_count']} ripulite.")
+
         print(f"[Database] All proposals are up to date and deduplicated ({db.query(PoliticalProposal).count()} total).")
 
 

@@ -10,8 +10,21 @@ router = APIRouter(prefix="/api/parties", tags=["Partiti Politici"])
 
 @router.get("", response_model=List[PoliticalPartySchema])
 def list_parties(db: Session = Depends(get_db)):
-    """Returns all registered political parties with current proposal count."""
+    """Returns all registered political parties with current proposal count and dynamic AI polling averages."""
+    import datetime
+    today_str = datetime.datetime.now().strftime("%d/%m/%Y")
     parties = db.query(PoliticalParty).order_by(PoliticalParty.poll_percentage.desc()).all()
+    first_p = parties[0] if parties else None
+    
+    # Auto-synchronize polling tracking if not yet refreshed today
+    if first_p and (not first_p.poll_sources or today_str not in first_p.poll_sources):
+        try:
+            from app.ingestion.poll_tracker import run_poll_tracker_pipeline
+            run_poll_tracker_pipeline(db)
+            parties = db.query(PoliticalParty).order_by(PoliticalParty.poll_percentage.desc()).all()
+        except Exception as e:
+            print(f"[Parties API] Auto-refresh poll notice: {e}")
+
     results = []
     for p in parties:
         count = db.query(func.count(PoliticalProposal.id)).filter(PoliticalProposal.party_id == p.id).scalar() or 0

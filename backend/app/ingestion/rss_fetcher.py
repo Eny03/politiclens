@@ -21,7 +21,7 @@ def parse_entry_datetime(entry: Any) -> datetime.datetime:
             return date_parser.parse(entry.updated).replace(tzinfo=None)
         except Exception:
             pass
-    return datetime.datetime.utcnow()
+    return datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
 
 def fetch_rss_feed_entries(feed_info: Dict[str, Any], max_items: int = 10) -> List[Dict[str, Any]]:
     """

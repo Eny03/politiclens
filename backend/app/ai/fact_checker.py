@@ -91,12 +91,18 @@ def analyze_feasibility_and_factcheck(
     cov_low = (coperture or "").lower()
     combined = f"{s_low} {raw_low} {cost_low} {cov_low}"
 
+    # FIX AI-03: Stance detection check — if the party statement expresses opposition, criticism, or denunciation
+    # of an unfeasible policy (e.g. Azione opposing 100% renewables by 2028), do not misclassify the party's own position as Fake/Inattuabile.
+    is_critical_stance = any(w in s_low for w in [
+        "contrariet", "contrario", "critica", "denuncia", "opposizione a", "respinge", "frena su", "boccia", "avverte contro"
+    ])
+
     # =========================================================================
     # 1. SCIENTIFIC & STATISTICAL FALSEHOODS (0%)
     # =========================================================================
 
     # A. Nuclear Energy CO2 & Safety Falsehoods
-    if "nucleare" in combined:
+    if "nucleare" in combined and not is_critical_stance:
         if any(w in combined for w in ["2 milioni", "milioni di tonnellate", "inquinante come", "emette co2", "produce co2", "fuga radioattiva universale", "più inquinante del carbone"]):
             return (
                 "Assunto scientificamente privo di fondamento: le centrali nucleari producono energia tramite fissione senza reazioni di combustione e non rilasciano gas serra in atmosfera.",
@@ -131,7 +137,7 @@ def analyze_feasibility_and_factcheck(
     # =========================================================================
 
     # A. Physically / Technically Impossible Renewable Timelines
-    if any(w in combined for w in ["rinnovabili", "fonti rinnovabili", "green"]) and any(w in combined for w in ["2028", "entro il 2028", "in 2 anni", "in 3 anni", "domani"]):
+    if not is_critical_stance and any(w in combined for w in ["rinnovabili", "fonti rinnovabili", "green"]) and any(w in combined for w in ["2028", "entro il 2028", "in 2 anni", "in 3 anni", "domani"]):
         if any(w in combined for w in ["100%", "solo rinnovabili", "totale"]):
             return (
                 "Obiettivo fisicamente e tecnicamente irrealizzabile entro il 2028: la quota attuale di FER sul mix elettrico italiano è di circa il 37-40%.",
@@ -142,7 +148,7 @@ def analyze_feasibility_and_factcheck(
             )
 
     # B. Unilateral Naval Blockade in International Waters
-    if "blocco navale" in combined and any(w in combined for w in ["acque internazionali", "unilaterale", "fermare con navi"]):
+    if not is_critical_stance and "blocco navale" in combined and any(w in combined for w in ["acque internazionali", "unilaterale", "fermare con navi"]):
         return (
             "Inattuabile come blocco navale unilaterale in acque internazionali in tempo di pace in base al diritto della navigazione.",
             "Inattuabile",
@@ -152,7 +158,7 @@ def analyze_feasibility_and_factcheck(
         )
 
     # C. Immediate unilateral exit from Euro / NATO via decree
-    if any(w in combined for w in ["uscita dall'euro", "uscire dalla nato", "abrogare l'euro"]):
+    if not is_critical_stance and any(w in combined for w in ["uscita dall'euro", "uscire dalla nato", "abrogare l'euro"]):
         if any(w in combined for w in ["immediata", "decreto", "domani"]):
             return (
                 "Inattuabile con atto interno unilaterale: l'ordinamento costituzionale italiano sancisce il rispetto dei vincoli derivanti dall'ordinamento comunitario (art. 11 e 117 Cost.).",

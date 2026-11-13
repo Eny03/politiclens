@@ -104,7 +104,7 @@ def get_visitor_stats(
     db: Session = Depends(get_db)
 ):
     """Returns high-level visitor metrics: online now, unique visitors today, total, and device distribution."""
-    now = datetime.datetime.utcnow()
+    now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
     five_min_ago = now - datetime.timedelta(minutes=5)
     midnight_today = datetime.datetime(now.year, now.month, now.day)
 
@@ -173,7 +173,7 @@ def get_visitor_ip_list(
     Returns the comprehensive list of unique visitor IPs with online status,
     visit counts, first/last seen timestamps, device/browser details, and recent paths.
     """
-    now = datetime.datetime.utcnow()
+    now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
     five_min_ago = now - datetime.timedelta(minutes=5)
     midnight_today = datetime.datetime(now.year, now.month, now.day)
 

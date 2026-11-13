@@ -117,7 +117,7 @@ def merge_or_update_policy_proposal(
     Autonomous AI Policy Merger & Evolver:
     Updates an existing proposal within its active timeframe with the latest details, costs, and fact-check data.
     """
-    dt = datetime.datetime.fromisoformat(item.timestamp) if item.timestamp else (published_at or datetime.datetime.utcnow())
+    dt = datetime.datetime.fromisoformat(item.timestamp) if item.timestamp else (published_at or datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None))
 
     # Update statement with latest formulation
     existing.dichiarazione_sintesi = item.dichiarazione_sintesi

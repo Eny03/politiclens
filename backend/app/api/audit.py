@@ -51,7 +51,7 @@ def sync_audit_with_proposals(db: Session):
                 new_value=p.dichiarazione_sintesi[:90] + "..." if len(p.dichiarazione_sintesi) > 90 else p.dichiarazione_sintesi,
                 agent_responsible="PolicyDistillerAgent",
                 details=f"Aggiunta proposta per {p.partito} ({p.macro_argomento}): '{p.dichiarazione_sintesi}'. Fonte: {p.fonte_testata or 'Atti Ufficiali'}.",
-                timestamp=p.timestamp or datetime.datetime.utcnow()
+                timestamp=p.timestamp or datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
             ))
             existing_added_ids.add(p_id_str)
             

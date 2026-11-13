@@ -343,7 +343,7 @@ def _extract_heuristically(
     """
     full_text = f"{title or ''} {text}".strip()
     lower = full_text.lower()
-    ts = (published_at or datetime.datetime.utcnow()).isoformat()
+    ts = (published_at or datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)).isoformat()
 
     # 1. Strict Exclusion Filter: discard pure gossip, internal friction, congress elections, clashes, media polemics
     for pattern in NON_POLICY_PATTERNS:
@@ -471,7 +471,7 @@ async def extract_proposals_from_text(
     Extracts structured political proposals using Multi-Provider LLM (Ollama, Groq, Gemini)
     if available, or robust heuristic fallback.
     """
-    ts = (published_at or datetime.datetime.utcnow()).isoformat()
+    ts = (published_at or datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)).isoformat()
     provider_info = await llm_provider.get_active_provider_info()
     
     if provider_info["provider"] != "deterministic":

@@ -314,7 +314,7 @@ def purge_and_audit_invalid_proposals(db) -> dict:
                 new_value=None,
                 agent_responsible="QualityGatekeeperAgent",
                 details=f"Cancellata proposta non conforme alle linee guida di policy: titolo di evento, citazione giornalistica, brand editoriale o duplicazione ('{stmt}').",
-                timestamp=datetime.datetime.utcnow()
+                timestamp=datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
             ))
             db.delete(p)
         elif val_stmt != stmt:

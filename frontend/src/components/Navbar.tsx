@@ -79,44 +79,44 @@ export function Navbar() {
 
   const allSections = [
     { 
-      name: "Dashboard & Panoramica", 
-      desc: "Indicatori economici reali, sondaggi e ultime posizioni censite", 
+      name: "Manifesto & Idee", 
+      desc: "Raccolta e confronto delle proposte politiche, programmi e battaglie dei partiti", 
       href: "/", 
       icon: <Compass className="w-5 h-5 text-blue-600 dark:text-blue-400" /> 
     },
     { 
-      name: "Manifesto Comparativo", 
-      desc: "Confronto testa a testa e matrice di tutte le forze politiche", 
+      name: "Confronto Programmi", 
+      desc: "Matrice di confronto tematico e comparatore testa a testa tra partiti", 
       href: "/compare", 
       icon: <Layers className="w-5 h-5 text-indigo-600 dark:text-indigo-400" /> 
     },
     { 
-      name: "Schede Partiti & Dossier", 
-      desc: "Programmi ufficiali, posizioni verificate e sintesi strategica", 
+      name: "Partiti & Leader", 
+      desc: "Dossier programmatici completi, schede e posizioni ufficiali per ogni partito", 
       href: "/parties", 
       icon: <Building2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" /> 
     },
     { 
-      name: "Fact-Check Finanziario & Sostenibilità", 
-      desc: "Scrutinio coperture finanziarie, fattibilità economica e vincoli di bilancio", 
-      href: "/fact-check", 
-      icon: <ShieldCheck className="w-5 h-5 text-amber-600 dark:text-amber-400" /> 
-    },
-    { 
-      name: "Chat AI Neutrale & Atti Parlamentari", 
-      desc: "Assistente RAG indipendente con citazioni verificate dei programmi e degli atti", 
+      name: "Chat AI Assistente", 
+      desc: "Interroga i programmi e gli atti parlamentari con citazioni trasparenti", 
       href: "/chat", 
       icon: <Bot className="w-5 h-5 text-purple-600 dark:text-purple-400" /> 
     },
     { 
-      name: "Fonti & Web Crawler", 
-      desc: "Monitoraggio continuo feed RSS, DDL e canali pubblici", 
+      name: "Quadro Tecnico & Bilanci", 
+      desc: "Scheda tecnica: fattibilità economica (Art. 81 Cost.) e veridicità delle affermazioni", 
+      href: "/fact-check", 
+      icon: <ShieldCheck className="w-5 h-5 text-amber-600 dark:text-amber-400" /> 
+    },
+    { 
+      name: "Fonti & Rassegna", 
+      desc: "Monitoraggio continuo feed RSS, DDL e rassegna stampa istituzionale", 
       href: "/sources", 
       icon: <Rss className="w-5 h-5 text-sky-600 dark:text-sky-400" /> 
     },
     { 
-      name: "Registro Modifiche & Audit AI", 
-      desc: "Tracciamento immutabile di variazioni demoscopiche e verifiche", 
+      name: "Registro Modifiche & Audit", 
+      desc: "Storico immutabile delle variazioni demoscopiche e revisioni delle proposte", 
       href: "/audit", 
       icon: <History className="w-5 h-5 text-teal-600 dark:text-teal-400" /> 
     },

@@ -2,6 +2,7 @@ import os
 import json
 import asyncio
 import datetime
+import hashlib
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
@@ -37,12 +38,14 @@ Base.metadata.create_all(bind=engine)
 def seed_database_if_empty():
     """Seeds initial parties, documented proposals, and economic benchmarks if not present."""
     from sqlalchemy import text
-    Base.metadata.create_all(bind=engine)
+    # NOTE: Base.metadata.create_all() is already called at module level (line above); no need to repeat here.
     try:
         with engine.connect() as conn:
             for tbl, col, ctype in [
                 ("political_parties", "dossier_ai", "TEXT"),
                 ("political_parties", "poll_percentage", "FLOAT"),
+                ("political_parties", "previous_poll_percentage", "FLOAT"),
+                ("political_parties", "last_poll_date", "DATETIME"),
                 ("political_parties", "poll_trend", "VARCHAR(20)"),
                 ("political_parties", "poll_sources", "VARCHAR(255)"),
                 ("political_parties", "truthfulness_score", "FLOAT"),
@@ -87,6 +90,7 @@ def seed_database_if_empty():
                     curr.poll_percentage = round(sum(s_vals) / len(s_vals), 1)
                     curr.poll_sources = f"Media calcolata dall'AI su {len(s_vals)} istituti ({', '.join(list(bench['surveys'].keys())[:4])})"
                     prev_w = bench.get("previous_wave", curr.poll_percentage)
+                    curr.previous_poll_percentage = prev_w
                     d = round(curr.poll_percentage - prev_w, 1)
                     curr.poll_trend = f"+{d:.1f}%" if d > 0 else (f"{d:.1f}%" if d < 0 else "stabile")
                 elif p_data.get("poll_percentage") is not None:
@@ -158,9 +162,9 @@ def seed_database_if_empty():
                     try:
                         ts_val = datetime.datetime.fromisoformat(ts_val)
                     except Exception:
-                        ts_val = datetime.datetime.utcnow()
+                        ts_val = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
                 elif not isinstance(ts_val, datetime.datetime):
-                    ts_val = datetime.datetime.utcnow()
+                    ts_val = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
 
                 record = PoliticalProposal(
                     party_id=party_id,
@@ -239,7 +243,7 @@ def seed_database_if_empty():
                     new_value=None,
                     agent_responsible="DeduplicationAgent",
                     details=f"Cancellazione proposta duplicata di {dp.partito} ({dp.macro_argomento}): '{dp.dichiarazione_sintesi[:90]}...'.",
-                    timestamp=datetime.datetime.utcnow()
+                    timestamp=datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
                 )
                 db.add(del_log)
                 db.delete(dp)
@@ -270,7 +274,7 @@ def seed_database_if_empty():
                     new_value=p.dichiarazione_sintesi[:90] + "...",
                     agent_responsible="PolicyMergerAgent",
                     details=f"Rettifica e allineamento politico d'opposizione: '{p.dichiarazione_sintesi}'.",
-                    timestamp=datetime.datetime.utcnow()
+                    timestamp=datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
                 )
                 db.add(mod_log)
                 continue
@@ -294,7 +298,7 @@ def seed_database_if_empty():
                     new_value=p.dichiarazione_sintesi[:90] + "...",
                     agent_responsible="PolicyMergerAgent",
                     details=f"Riformulazione da slogan astratto a disegno di legge parlamentare concreto: '{p.dichiarazione_sintesi}'.",
-                    timestamp=datetime.datetime.utcnow()
+                    timestamp=datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
                 )
                 db.add(mod_log)
                 continue
@@ -310,7 +314,7 @@ def seed_database_if_empty():
                     new_value=None,
                     agent_responsible="DataSanitizerAgent",
                     details=f"Cancellazione proposta incompleta o non valida di {p.partito} ({p.macro_argomento}): '{p.dichiarazione_sintesi}'.",
-                    timestamp=datetime.datetime.utcnow()
+                    timestamp=datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
                 )
                 db.add(del_log)
                 db.delete(p)
@@ -342,20 +346,33 @@ def seed_database_if_empty():
         db.commit()
 
         # Strict deduplication for any remaining duplicate identical entries
-        for p in db.query(PoliticalProposal).all():
-            others = db.query(PoliticalProposal).filter(
-                PoliticalProposal.partito == p.partito,
-                PoliticalProposal.macro_argomento == p.macro_argomento,
-                PoliticalProposal.id < p.id
-            ).all()
-            for other in others:
-                from difflib import SequenceMatcher
-                ratio = SequenceMatcher(None, p.dichiarazione_sintesi.lower(), other.dichiarazione_sintesi.lower()).ratio()
-                p_w = set(p.dichiarazione_sintesi.lower().split())
-                o_w = set(other.dichiarazione_sintesi.lower().split())
-                if ratio > 0.75 and len(p_w & o_w) >= 4:
-                    db.delete(p)
-                    break
+        # FIX BUG-03: optimized from O(N²) queries to a single query + in-memory grouping O(N)
+        from difflib import SequenceMatcher
+        _dedup_all = db.query(PoliticalProposal).order_by(PoliticalProposal.id).all()
+        _dedup_groups: dict = {}
+        for _dp in _dedup_all:
+            _dkey = (_dp.partito, _dp.macro_argomento)
+            _dedup_groups.setdefault(_dkey, []).append(_dp)
+        _ids_to_delete: set = set()
+        for _dkey, _dgroup in _dedup_groups.items():
+            for _di, _dp in enumerate(_dgroup):
+                if _dp.id in _ids_to_delete:
+                    continue
+                for _dother in _dgroup[:_di]:
+                    if _dother.id in _ids_to_delete:
+                        continue
+                    _ratio = SequenceMatcher(None, _dp.dichiarazione_sintesi.lower(), _dother.dichiarazione_sintesi.lower()).ratio()
+                    _p_w = set(_dp.dichiarazione_sintesi.lower().split())
+                    _o_w = set(_dother.dichiarazione_sintesi.lower().split())
+                    if _ratio > 0.75 and len(_p_w & _o_w) >= 4:
+                        _ids_to_delete.add(_dp.id)
+                        break
+        for _dp in _dedup_all:
+            if _dp.id in _ids_to_delete:
+                try:
+                    db.delete(_dp)
+                except Exception:
+                    pass
         db.commit()
 
         # Deduplicate nuclear template clones across parties
@@ -403,7 +420,7 @@ def seed_database_if_empty():
                 fonte_url="https://movimento-ora.it",
                 fonte_titolo="Programma Sanità e Liste d'Attesa",
                 fonte_testata="ORA! Ufficio Studi",
-                timestamp=datetime.datetime.utcnow()
+                timestamp=datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
             )
             db.add(new_ora)
             db.commit()
@@ -447,7 +464,11 @@ def seed_database_if_empty():
                 from app.ai.fact_checker import analyze_feasibility_and_factcheck
                 from app.ai.fiscal_calculator import calculate_fiscal_impact_and_coverage, calculate_financial_coverage_percentage
 
-                if not p.costo_stimato or p.costo_stimato.lower() in ["non quantificato", "non quantificata", "da definire"] or not p.coperture_dichiarate or len(p.coperture_dichiarate) < 15:
+                # FIX AI-06: skip redundant re-calculation on startup if proposal already has valid fiscal & fact-check data
+                needs_fiscal = not p.costo_stimato or p.costo_stimato.lower() in ["non quantificato", "non quantificata", "da definire"] or not p.coperture_dichiarate or len(p.coperture_dichiarate) < 15
+                needs_factcheck = not p.fact_check_status or not p.fact_check_motivazione or p.truth_score is None
+
+                if needs_fiscal:
                     f_calc = calculate_fiscal_impact_and_coverage(
                         partito=p.partito,
                         macro_argomento=p.macro_argomento,
@@ -459,20 +480,21 @@ def seed_database_if_empty():
                     p.coperture_dichiarate = f_calc["coperture_dichiarate"]
                     p.fattibilita_finanziaria = f_calc["fattibilita_finanziaria"]
 
-                feas_data = analyze_feasibility_and_factcheck(
-                    partito=p.partito,
-                    macro_argomento=p.macro_argomento,
-                    sintesi=p.dichiarazione_sintesi,
-                    costo_stimato=p.costo_stimato,
-                    coperture=p.coperture_dichiarate,
-                    raw_text=p.raw_text or ""
-                )
-                feas, st, mot, src = feas_data[:4]
-                t_vote = feas_data[4] if len(feas_data) > 4 else 75.0
-                p.fact_check_status = st
-                p.fact_check_motivazione = mot
-                p.fact_check_fonte = src
-                p.truth_score = t_vote
+                if needs_factcheck or needs_fiscal:
+                    feas_data = analyze_feasibility_and_factcheck(
+                        partito=p.partito,
+                        macro_argomento=p.macro_argomento,
+                        sintesi=p.dichiarazione_sintesi,
+                        costo_stimato=p.costo_stimato,
+                        coperture=p.coperture_dichiarate,
+                        raw_text=p.raw_text or ""
+                    )
+                    feas, st, mot, src = feas_data[:4]
+                    t_vote = feas_data[4] if len(feas_data) > 4 else 75.0
+                    p.fact_check_status = st
+                    p.fact_check_motivazione = mot
+                    p.fact_check_fonte = src
+                    p.truth_score = t_vote
             db.commit()
 
             # Recalculate and persist calibrated party truthfulness and coverage scores
@@ -516,7 +538,7 @@ async def _autonomous_self_keepalive():
     resets Render's 15-minute idle timer, preventing the free tier container from sleeping.
     """
     await asyncio.sleep(45)  # Let server complete initial startup
-    external_url = os.environ.get("RENDER_EXTERNAL_URL", "https://politclens.onrender.com")
+    external_url = os.environ.get("RENDER_EXTERNAL_URL", "https://politilens.onrender.com")
     health_endpoint = f"{external_url.rstrip('/')}/api/health"
     print(f"[Keepalive] Autonomous 24/7 background keepalive loop started (target: {health_endpoint}).")
     
@@ -542,7 +564,10 @@ async def _autonomous_self_keepalive():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("[PoliticLens] Inizializzazione piattaforma e database...")
-    seed_database_if_empty()
+    # FIX BUG-02: run seed in a background thread to avoid blocking the async event loop
+    # seed_database_if_empty() is a long-running sync function (~5-60s) — asyncio.to_thread
+    # lets FastAPI stay responsive to health checks during startup.
+    await asyncio.to_thread(seed_database_if_empty)
     start_scheduler()
     
     # Autonomous startup poll sync (in background after 2 seconds)
@@ -583,9 +608,18 @@ app = FastAPI(
 )
 
 # CORS Middleware
+# FIX SEC-01: allow_origins=["*"] combined with allow_credentials=True is forbidden by the CORS spec.
+# Use explicit origins; set CORS_ORIGINS env var in production to match your frontend domain(s).
+import os as _os
+_CORS_ORIGINS = [
+    o.strip() for o in _os.getenv(
+        "CORS_ORIGINS",
+        "http://localhost:3000,http://localhost:3001,https://politclens.onrender.com"
+    ).split(",") if o.strip()
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -661,6 +695,14 @@ async def visitor_tracking_middleware(request: Request, call_next):
         import datetime
 
         client_ip = extract_client_ip(request)
+        # FIX SEC-04: anonymize IP for GDPR compliance — store only first 3 octets (IPv4) or hashed prefix (IPv6)
+        if client_ip and "." in client_ip:
+            ip_parts = client_ip.split(".")
+            anon_ip = ".".join(ip_parts[:3]) + ".0"  # e.g. 192.168.1.0
+        elif client_ip:
+            anon_ip = hashlib.sha256(client_ip.encode()).hexdigest()[:16]  # IPv6 hash prefix
+        else:
+            anon_ip = "0.0.0.0"
         ua_str = request.headers.get("user-agent", "")
         method = request.method
         country = request.headers.get("cf-ipcountry")
@@ -670,7 +712,7 @@ async def visitor_tracking_middleware(request: Request, call_next):
             try:
                 ua_info = parse_visitor_user_agent(ua_str)
                 log = VisitorLog(
-                    ip_address=client_ip,
+                    ip_address=anon_ip,
                     path=path,
                     method=method,
                     user_agent=ua_str[:500] if ua_str else None,
@@ -678,7 +720,7 @@ async def visitor_tracking_middleware(request: Request, call_next):
                     browser=ua_info["browser"],
                     os_name=ua_info["os"],
                     country=country,
-                    timestamp=datetime.datetime.utcnow()
+                    timestamp=datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
                 )
                 db.add(log)
                 db.commit()

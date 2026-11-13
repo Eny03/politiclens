@@ -1,4 +1,6 @@
 import json
+import time
+import asyncio
 from typing import Optional, Dict, Any, List
 import httpx
 from app.config import settings
@@ -8,23 +10,32 @@ class OllamaClient:
         self.base_url = (base_url or settings.OLLAMA_BASE_URL).rstrip("/")
         self._cached_available: Optional[bool] = None
         self._last_check_time: float = 0
+        self._lock: Optional[asyncio.Lock] = None
         
     async def is_available(self) -> bool:
-        """Checks if local Ollama server is running and reachable (cached for 60s)."""
-        import time
+        """Checks if local Ollama server is running and reachable (cached for 60s, thread-safe with asyncio.Lock)."""
         now = time.time()
         if self._cached_available is not None and (now - self._last_check_time) < 60:
             return self._cached_available
 
-        try:
-            async with httpx.AsyncClient(timeout=0.6) as client:
-                res = await client.get(f"{self.base_url}/api/tags")
-                self._cached_available = (res.status_code == 200)
-        except Exception:
-            self._cached_available = False
+        if self._lock is None:
+            self._lock = asyncio.Lock()
 
-        self._last_check_time = now
-        return self._cached_available
+        async with self._lock:
+            # Double check inside lock to prevent redundant HTTP probes
+            now = time.time()
+            if self._cached_available is not None and (now - self._last_check_time) < 60:
+                return self._cached_available
+
+            try:
+                async with httpx.AsyncClient(timeout=0.6) as client:
+                    res = await client.get(f"{self.base_url}/api/tags")
+                    self._cached_available = (res.status_code == 200)
+            except Exception:
+                self._cached_available = False
+
+            self._last_check_time = now
+            return self._cached_available
 
     async def list_models(self) -> List[str]:
         """Returns list of installed local models in Ollama."""

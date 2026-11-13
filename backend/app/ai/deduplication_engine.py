@@ -54,6 +54,11 @@ def clean_and_tokenize(text: str) -> Set[str]:
     words = {w for w in normalized.split() if w not in STOPWORDS and len(w) > 3}
     return words
 
+OPPOSITION_MARKERS = {
+    "contrariet", "contrario", "contraria", "opposizione", "abrogazione", "abrogare",
+    "stop", "blocco", "respingere", "bocciare", "rifiuto", "no al", "no alla"
+}
+
 def is_duplicate_proposal(
     party_a: str,
     topic_a: str,
@@ -67,6 +72,7 @@ def is_duplicate_proposal(
     """
     Unified, multi-criteria semantic deduplication check.
     Returns (True, reason) if text_a and text_b represent the same policy reform.
+    Calibrated to prevent false positives and accidental erasure of distinct policy positions.
     """
     # Rule 0: Must belong to the same party and macro-topic
     if party_a.strip().lower() != party_b.strip().lower():
@@ -81,34 +87,42 @@ def is_duplicate_proposal(
     if t1 == t2:
         return True, "Exact match"
 
-    # Rule 2: Policy Subject Cluster match (e.g. both speak of 'Piano Mattei' or 'Quota 41')
+    # Rule 1b: Stance polarity check — never duplicate favorable vs opposing policies on the same theme
+    t1_opp = any(m in t1 for m in OPPOSITION_MARKERS)
+    t2_opp = any(m in t2 for m in OPPOSITION_MARKERS)
+    if t1_opp != t2_opp:
+        return False, "Opposing political stances (in favor vs opposition)"
+
+    # Rule 2: Policy Subject Cluster match (must share substantive content words, not just the keyword)
+    words1 = clean_and_tokenize(t1)
+    words2 = clean_and_tokenize(t2)
+    common = words1 & words2
+
     for cluster in POLICY_CLUSTERS:
         has_1 = any(term in t1 for term in cluster)
         has_2 = any(term in t2 for term in cluster)
         if has_1 and has_2:
-            return True, f"Matched subject cluster: {cluster[0]}"
+            # Require at least 2 common substantive words or ratio >= 0.50 to avoid false positives
+            if len(common) >= 2 or SequenceMatcher(None, t1, t2).ratio() >= 0.50:
+                return True, f"Matched subject cluster: {cluster[0]} with shared substantive context"
 
     # Rule 3: Asymmetric Substantive Word Containment
     # (dividing by min ensures a detailed version matches a concise version)
-    words1 = clean_and_tokenize(t1)
-    words2 = clean_and_tokenize(t2)
-    common = words1 & words2
-    
     if len(words1) > 0 and len(words2) > 0:
         containment = len(common) / min(len(words1), len(words2))
-        if containment >= 0.45 and len(common) >= 3:
+        if containment >= 0.55 and len(common) >= 4:
             return True, f"Word containment {containment:.2f} ({len(common)} shared substantive words)"
 
-    # Rule 4: String Sequence Similarity (fuzzy match)
+    # Rule 4: String Sequence Similarity (calibrated from 0.48 to 0.72 to prevent false positives)
     ratio = SequenceMatcher(None, t1, t2).ratio()
-    if ratio >= 0.48:
+    if ratio >= 0.72:
         return True, f"SequenceMatcher ratio {ratio:.2f}"
 
-    # Rule 5: Semantic Embedding Cosine Similarity
+    # Rule 5: Semantic Embedding Cosine Similarity (calibrated threshold)
     if emb_a and emb_b:
         try:
             sim = cosine_similarity(emb_a, emb_b)
-            if sim >= 0.76:
+            if sim >= 0.82:
                 return True, f"Embedding similarity {sim:.2f}"
         except Exception:
             pass

@@ -47,7 +47,7 @@ def search_web_news(query: str, max_results: int = 15) -> List[Dict[str, Any]]:
                 "url": link,
                 "summary": clean_summary,
                 "source_name": source_title,
-                "published_at": datetime.datetime.utcnow(),
+                "published_at": datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None),
                 "detected_parties": parties,
                 "detected_topics": topics,
                 "raw_text": combined_text
@@ -90,7 +90,7 @@ def search_duckduckgo_open_web(query: str, max_results: int = 10) -> List[Dict[s
                             "url": link,
                             "summary": snippet,
                             "source_name": "Open Web Search",
-                            "published_at": datetime.datetime.utcnow(),
+                            "published_at": datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None),
                             "detected_parties": parties,
                             "detected_topics": topics,
                             "raw_text": combined_text

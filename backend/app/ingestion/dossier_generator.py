@@ -461,7 +461,7 @@ def generate_party_dossier(party: PoliticalParty, db: Session) -> Dict[str, Any]
         criticita_osservatorio = "Necessità di quantificazione finanziaria formale nei disegni di legge."
 
     # Dynamic Evolution Extension: incorporate real newly-ingested proposals for future years
-    current_year = datetime.datetime.utcnow().year
+    current_year = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None).year
     future_props = [p for p in proposals if p.timestamp and p.timestamp.year >= 2025]
     if future_props:
         by_year_map = {}
@@ -470,7 +470,7 @@ def generate_party_dossier(party: PoliticalParty, db: Session) -> Dict[str, Any]
         for yr, p_list in by_year_map.items():
             if yr >= 2026:
                 label = f"{yr} (Sviluppi & Iniziative Recenti)" if yr <= current_year else f"{yr} (Proiezioni & DDL Futuri)"
-                if not any(str(yr) in ev.get("periodo", "") for ev in evoluzione_storica):
+                if not any(ev.get("periodo", "").startswith(f"{yr} (") for ev in evoluzione_storica):
                     summaries = " • ".join([f"[{p.macro_argomento}] {p.dichiarazione_sintesi[:80]}" for p in p_list[:2]])
                     evoluzione_storica.append({
                         "periodo": label,
@@ -546,7 +546,7 @@ def generate_party_dossier(party: PoliticalParty, db: Session) -> Dict[str, Any]
     recent_quotes = []
     for p in proposals[:6]:
         recent_quotes.append({
-            "data": p.timestamp.strftime("%d/%m/%Y") if p.timestamp else datetime.datetime.utcnow().strftime("%d/%m/%Y"),
+            "data": p.timestamp.strftime("%d/%m/%Y") if p.timestamp else datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None).strftime("%d/%m/%Y"),
             "titolo": p.fonte_titolo or p.dichiarazione_sintesi[:80] + "...",
             "dichiarazione": p.dichiarazione_sintesi,
             "fonte": p.fonte_testata or "Stampa Nazionale & Istituzioni",
@@ -573,7 +573,7 @@ def generate_party_dossier(party: PoliticalParty, db: Session) -> Dict[str, Any]
         "valutazione_finanziaria": valutazione_finanziaria,
         "dichiarazioni_recenti_web": recent_quotes,
         "parametri_macro_confronto": benchmarks_summary,
-        "ultimo_aggiornamento_web": datetime.datetime.utcnow().strftime("%d/%m/%Y ore %H:%M UTC")
+        "ultimo_aggiornamento_web": datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None).strftime("%d/%m/%Y ore %H:%M UTC")
     }
 
     return dossier

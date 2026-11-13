@@ -232,9 +232,12 @@ export default function PartiesPage() {
 
                     <div className="flex flex-wrap items-center gap-2 pt-2.5">
                       {selectedParty.poll_percentage !== undefined && (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-bold bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-bold bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800" title={`Rilevazione precedente: ${selectedParty.previous_poll_percentage ?? selectedParty.poll_percentage}% • Variazione: ${selectedParty.poll_trend || "stabile"}`}>
                           <TrendingUp className="w-3.5 h-3.5" />
-                          <span>Sondaggi: {selectedParty.poll_percentage}% ({selectedParty.poll_trend || "stabile"})</span>
+                          <span>
+                            Sondaggi: {selectedParty.poll_percentage}% 
+                            {selectedParty.previous_poll_percentage !== undefined && ` (Prec: ${selectedParty.previous_poll_percentage}%, Var: ${selectedParty.poll_trend || "stabile"})`}
+                          </span>
                         </span>
                       )}
                       {selectedParty.truthfulness_score !== undefined && (

@@ -35,8 +35,10 @@ class PoliticalPartySchema(BaseModel):
     description: Optional[str] = None
     dossier_ai: Optional[str] = None
     poll_percentage: Optional[float] = 0.0
+    previous_poll_percentage: Optional[float] = 0.0
     poll_trend: Optional[str] = "stabile"
     poll_sources: Optional[str] = "Media YouTrend/AGI, SWG, Ipsos, Tecnè, Noto"
+    last_poll_date: Optional[datetime] = None
     truthfulness_score: Optional[float] = 0.0
     financial_reliability_score: Optional[float] = 0.0
     proposals_count: Optional[int] = 0
@@ -173,6 +175,21 @@ class InstitutionalBenchmarkSchema(BaseModel):
     class Config:
         from_attributes = True
 
+class PollHistoryItemSchema(BaseModel):
+    id: int
+    party_id: Optional[int] = None
+    party_code: str
+    party_name: Optional[str] = None
+    percentage: float
+    previous_percentage: float = 0.0
+    delta: float = 0.0
+    trend: str = "stabile"
+    institutes: Optional[str] = None
+    wave_date: datetime
+
+    class Config:
+        from_attributes = True
+
 # Dashboard Stats
 class StatsOverviewResponse(BaseModel):
     total_proposals: int
@@ -184,6 +201,8 @@ class StatsOverviewResponse(BaseModel):
     quantified_cost_percentage: float
     average_truthfulness: float = 0.0
     average_financial_feasibility: float = 0.0
+    truthfulness_trend: Optional[str] = "+0.2%"
+    feasibility_trend: Optional[str] = "+0.1%"
     coalition_truthfulness: Dict[str, float] = {}
     party_rankings: List[Dict[str, Any]] = []
     truth_thresholds: List[Dict[str, Any]] = []

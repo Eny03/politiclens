@@ -11,8 +11,10 @@ export interface PoliticalParty {
   description?: string;
   dossier_ai?: string;
   poll_percentage?: number;
+  previous_poll_percentage?: number;
   poll_trend?: string;
   poll_sources?: string;
+  last_poll_date?: string;
   truthfulness_score?: number;
   financial_reliability_score?: number;
   proposals_count: number;
@@ -146,7 +148,9 @@ export interface PartyRankingItem {
   coalition: string;
   leader?: string;
   poll_percentage: number;
+  previous_poll_percentage?: number;
   poll_trend: string;
+  last_poll_date?: string;
   truthfulness_score: number;
   truthfulness_tier?: { min_score: number; tier: string; label: string; desc: string };
   financial_reliability_score: number;
@@ -163,12 +167,14 @@ export interface StatsOverview {
   quantified_cost_percentage: number;
   average_truthfulness?: number;
   average_financial_feasibility?: number;
+  truthfulness_trend?: string;
+  feasibility_trend?: string;
   coalition_truthfulness?: Record<string, number>;
   party_rankings?: PartyRankingItem[];
   truth_thresholds?: Array<{ min_score: number; tier: string; label: string; desc: string }>;
   last_ingestion_time?: string;
   last_poll_time?: string;
-  benchmarks_summary: InstitutionalBenchmark[];
+  benchmarks_summary?: InstitutionalBenchmark[];
 }
 
 export interface IngestionLog {

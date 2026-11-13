@@ -100,7 +100,7 @@ def delete_proposal_by_id(proposal_id: int, db: Session = Depends(get_db)):
         new_value=None,
         agent_responsible="QualityGatekeeperAgent",
         details=f"Cancellata proposta non conforme alle linee guida di policy (ID {p.id}): '{stmt}'.",
-        timestamp=datetime.datetime.utcnow()
+        timestamp=datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
     ))
     db.delete(p)
     db.commit()

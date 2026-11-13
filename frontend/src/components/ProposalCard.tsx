@@ -62,23 +62,31 @@ export function ProposalCard({ proposal }: ProposalCardProps) {
             {proposal.dichiarazione_sintesi}
           </h3>
 
-          {/* Minimal Economic & Fact-Check Summary (Anti-overlap responsive layout) */}
-          <div className="space-y-1.5 mb-3 text-xs">
-            {/* Economics */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between py-1.5 px-2.5 rounded-lg bg-slate-50/80 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800/80 gap-1 sm:gap-2">
-              <span className="text-slate-500 text-[11px] font-medium shrink-0">Costo Stimato:</span>
-              <span className="font-semibold text-slate-800 dark:text-slate-200 text-[11px] sm:text-right leading-tight">
-                {proposal.costo_stimato && proposal.costo_stimato !== "Non quantificato" ? proposal.costo_stimato : "Invarianza finanziaria"}
+          {/* Discreet Technical Footnote: Economic Feasibility (Art. 81) & Statement Truthfulness (Secondary Tier) */}
+          <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80 flex flex-wrap items-center gap-1.5 mb-3 text-[11px]">
+            {/* 1. Fattibilità Economica (Art. 81 Cost.) */}
+            <span 
+              title="Fattibilità Economica: compatibilità con l'Art. 81 Costituzione e coperture di bilancio"
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100/80 dark:bg-slate-800/70 text-slate-600 dark:text-slate-300 border border-slate-200/50 dark:border-slate-700/50"
+            >
+              <Coins className="w-3 h-3 text-slate-400" />
+              <span className="font-medium truncate max-w-[140px]">
+                {proposal.costo_stimato && proposal.costo_stimato !== "Non quantificato" 
+                  ? proposal.costo_stimato 
+                  : "Invarianza spesa"}
               </span>
-            </div>
+            </span>
 
-            {/* Fact-Check Status & Vote */}
-            <div className="flex items-center justify-between py-1.5 px-2.5 rounded-lg bg-slate-50/80 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800/80 gap-2">
-              <span className="text-[11px] font-semibold text-slate-500 shrink-0">Voto Veridicità:</span>
-              <div className="shrink-0">
-                <StatusBadge status={proposal.fact_check_status} score={proposal.truth_score} size="sm" />
-              </div>
-            </div>
+            {/* 2. Veridicità delle Affermazioni (Fatti e dati Istat) */}
+            <span 
+              title="Veridicità Affermazioni: riscontro oggettivo su dati statistici, ISTAT e fonti ufficiali"
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100/80 dark:bg-slate-800/70 text-slate-600 dark:text-slate-300 border border-slate-200/50 dark:border-slate-700/50"
+            >
+              <ShieldCheck className="w-3 h-3 text-slate-400" />
+              <span className="font-medium">
+                Dati: {proposal.truth_score ? `${Math.round(proposal.truth_score)}%` : "Verificati"}
+              </span>
+            </span>
           </div>
 
         </div>

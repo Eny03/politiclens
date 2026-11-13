@@ -56,7 +56,7 @@ class PolicyDistillerAgent:
             raw_text = art.get("raw_text", "")
             title = art.get("title", "")
             url = art.get("url", "")
-            pub_date = art.get("published_at", datetime.datetime.utcnow())
+            pub_date = art.get("published_at", datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None))
 
             # Run extraction
             extracted = await extract_proposals_from_text(
@@ -186,7 +186,7 @@ class ConsensusArbiterAgent:
                     new_value=synthesis[:90] + "..." if len(synthesis) > 90 else synthesis,
                     agent_responsible="ConsensusArbiterAgent",
                     details=f"Modifica proposta per {p_name} ({topic}) tramite Consensus Multi-AI: '{synthesis}'.",
-                    timestamp=datetime.datetime.utcnow()
+                    timestamp=datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
                 ))
                 updated_count += 1
             else:
@@ -228,7 +228,7 @@ class ConsensusArbiterAgent:
                     new_value=new_record.dichiarazione_sintesi[:90] + "..." if len(new_record.dichiarazione_sintesi) > 90 else new_record.dichiarazione_sintesi,
                     agent_responsible="ConsensusArbiterAgent",
                     details=f"Aggiunta proposta per {p_name} ({topic}) tramite Consensus Multi-AI: '{new_record.dichiarazione_sintesi}'.",
-                    timestamp=datetime.datetime.utcnow()
+                    timestamp=datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
                 ))
                 added_count += 1
 

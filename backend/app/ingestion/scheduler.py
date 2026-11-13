@@ -1,18 +1,24 @@
 import json
 import datetime
+import asyncio
 import re
-from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.config import settings
 from app.models import PoliticalProposal, PoliticalParty, IngestionLog, AuditLog
 from app.ingestion.rss_fetcher import fetch_all_active_feeds
 from app.ingestion.text_extractor import compute_content_hash
-from app.ai.extractor import extract_proposals_from_text
+from app.ai.extractor import extract_proposals_from_text, NON_POLICY_PATTERNS
 from app.ai.embeddings import get_text_embedding
 from app.ai.proposal_validator import sanitize_and_validate_proposal_statement
+from app.ai.policy_merger import find_matching_existing_proposal, merge_or_update_policy_proposal
+from app.ai.fact_checker import calculate_proposal_truthfulness_score
+from app.ai.fiscal_calculator import calculate_fiscal_impact_and_coverage
 
-scheduler = BackgroundScheduler()
+# FIX ARCH-03 + BUG-05: use AsyncIOScheduler instead of BackgroundScheduler to avoid
+# asyncio.run() conflicts with the FastAPI event loop.
+scheduler = AsyncIOScheduler()
 
 async def run_pipeline_scan():
     """
@@ -28,7 +34,8 @@ async def run_pipeline_scan():
     total_proposals = 0
     
     try:
-        articles = fetch_all_active_feeds(max_items_per_feed=settings.MAX_ARTICLES_PER_FEED)
+        # Offload synchronous network I/O to a worker thread so the FastAPI async loop is never blocked
+        articles = await asyncio.to_thread(fetch_all_active_feeds, max_items_per_feed=settings.MAX_ARTICLES_PER_FEED)
         total_articles = len(articles)
         
         for art in articles:
@@ -59,7 +66,7 @@ async def run_pipeline_scan():
                 party_id = party_obj.id
 
                 # Pre-ingestion Quality Gate 2: Strict Policy Validation (rejects slogans, media headlines, rally events, web domains)
-                from app.ai.proposal_validator import sanitize_and_validate_proposal_statement
+                # FIX BUG-04: imports moved to top-level, no longer repeated inside loop
                 val_stmt = sanitize_and_validate_proposal_statement(item.dichiarazione_sintesi)
                 if not val_stmt:
                     print(f"[Ingestion Gatekeeper] Scartata proposta non conforme alle linee guida di policy: '{item.dichiarazione_sintesi[:60]}...'")
@@ -67,7 +74,6 @@ async def run_pipeline_scan():
                 item.dichiarazione_sintesi = val_stmt
 
                 # Pre-ingestion Quality Gate 3: Check against gossip & non-policy keywords
-                from app.ai.extractor import NON_POLICY_PATTERNS
                 is_gossip = any(re.search(pat, item.dichiarazione_sintesi, re.IGNORECASE) for pat in NON_POLICY_PATTERNS)
                 if is_gossip:
                     print(f"[Ingestion Gatekeeper] Scartata proposta per match con pattern di cronaca/gossip: '{item.dichiarazione_sintesi[:50]}...'")
@@ -80,7 +86,6 @@ async def run_pipeline_scan():
                 item_hash = compute_content_hash(f"{item.partito}_{item.macro_argomento}_{item.dichiarazione_sintesi}")
 
                 # AI Semantic Deduplication & Policy Evolution
-                from app.ai.policy_merger import find_matching_existing_proposal, merge_or_update_policy_proposal
                 matching_existing = find_matching_existing_proposal(
                     db=db,
                     party_id=party_id,
@@ -117,12 +122,12 @@ async def run_pipeline_scan():
                         new_value=item.dichiarazione_sintesi[:90] + "..." if len(item.dichiarazione_sintesi) > 90 else item.dichiarazione_sintesi,
                         agent_responsible="PolicyMergerAgent",
                         details=f"Modifica proposta su {item.macro_argomento}: '{item.dichiarazione_sintesi}'. Costo: {item.impatto_economico.costo_stimato}. Coperture: {item.impatto_economico.coperture_dichiarate}.",
-                        timestamp=datetime.datetime.utcnow()
+                        timestamp=datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
                     )
                     db.add(audit_entry)
                 else:
                     dt = datetime.datetime.fromisoformat(item.timestamp) if item.timestamp else art["published_at"]
-                    from app.ai.fact_checker import calculate_proposal_truthfulness_score
+                    # FIX BUG-04: import moved to top-level
                     init_truth_score = calculate_proposal_truthfulness_score(item.fact_check.status)
                     proposal_record = PoliticalProposal(
                         party_id=party_id,
@@ -157,20 +162,19 @@ async def run_pipeline_scan():
                         new_value=item.dichiarazione_sintesi[:90] + "..." if len(item.dichiarazione_sintesi) > 90 else item.dichiarazione_sintesi,
                         agent_responsible="PolicyDistillerAgent",
                         details=f"Aggiunta nuova proposta per {item.partito} su {item.macro_argomento}: '{item.dichiarazione_sintesi}'. Fonte: {art.get('source_name', 'Web')}.",
-                        timestamp=datetime.datetime.utcnow()
+                        timestamp=datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
                     )
                     db.add(audit_entry)
                     total_proposals += 1
                 
         # Step 2: Autonomous Targeted Gap Search (Active Learning for Missing Parties & Topics)
-        # Paced to run every 30 minutes to prevent overnight saturation
-        now_dt = datetime.datetime.utcnow()
+        now_dt = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
         gap_info_msg = ""
-        if now_dt.minute in (0, 30):
+        if now_dt.minute in (0, 20, 40) or total_proposals == 0:
             try:
                 from app.ingestion.gap_detector import autonomous_targeted_gap_search
                 print("[Scheduler] Rilevamento lacune informative in corso...")
-                gap_res = await autonomous_targeted_gap_search(db, max_gaps=4)
+                gap_res = await autonomous_targeted_gap_search(db, max_gaps=2)
                 if gap_res:
                     gap_added = gap_res.get("proposals_added_or_updated", 0)
                     total_proposals += gap_added
@@ -210,7 +214,8 @@ async def run_pipeline_scan():
                     candidate.fattibilita_finanziaria = audit_res["fattibilita_finanziaria"]
                     candidate.fact_check_status = audit_res["fact_check_status"]
                     candidate.fact_check_motivazione = audit_res["fact_check_motivazione"]
-                    candidate.timestamp = datetime.datetime.utcnow()
+                    candidate.truth_score = calculate_proposal_truthfulness_score(candidate.fact_check_status)
+                    candidate.timestamp = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
                     
                     audit_entry = AuditLog(
                         event_type="modifica",
@@ -221,7 +226,7 @@ async def run_pipeline_scan():
                         new_value=candidate.dichiarazione_sintesi[:90] + "..." if len(candidate.dichiarazione_sintesi) > 90 else candidate.dichiarazione_sintesi,
                         agent_responsible="FiscalAuditorAgent",
                         details=f"Revisione e audit di fattibilità finanziaria (MEF/UPB) su {candidate.macro_argomento}: '{candidate.dichiarazione_sintesi}'. Parametro: {audit_res['fattibilita_finanziaria'][:75]}.",
-                        timestamp=datetime.datetime.utcnow()
+                        timestamp=datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
                     )
                     db.add(audit_entry)
                     total_proposals += 1
@@ -231,20 +236,24 @@ async def run_pipeline_scan():
                 print(f"[Scheduler] Fiscal audit cycle notice: {fe}")
 
         # Step 2d: Quality Gatekeeper Auto-Audit (scans and purges non-policy slogans, media brands and headline snippets)
-        try:
-            from app.ai.proposal_validator import purge_and_audit_invalid_proposals
-            purge_res = purge_and_audit_invalid_proposals(db)
-            if purge_res.get("deleted_count") or purge_res.get("cleaned_count"):
-                print(f"[Scheduler Gatekeeper] Audit completato: {purge_res.get('deleted_count')} eliminate, {purge_res.get('cleaned_count')} ripulite.")
-        except Exception as qe:
-            print(f"[Scheduler] Gatekeeper auto-audit notice: {qe}")
+        # FIX AI-07: run gatekeeper only when new/modified proposals were detected in this ingestion cycle
+        if total_proposals > 0:
+            try:
+                from app.ai.proposal_validator import purge_and_audit_invalid_proposals
+                purge_res = purge_and_audit_invalid_proposals(db)
+                if purge_res.get("deleted_count") or purge_res.get("cleaned_count"):
+                    print(f"[Scheduler Gatekeeper] Audit completato: {purge_res.get('deleted_count')} eliminate, {purge_res.get('cleaned_count')} ripulite.")
+            except Exception as qe:
+                print(f"[Scheduler] Gatekeeper auto-audit notice: {qe}")
 
         # Step 3: Autonomously synthesize and update AI Dossiers for all political parties
-        try:
-            from app.ingestion.dossier_generator import update_all_party_dossiers
-            update_all_party_dossiers(db)
-        except Exception as de:
-            print(f"[Scheduler] AI Dossier generation warning: {de}")
+        # FIX AI-08: regenerate dossiers only when proposals changed during this cycle
+        if total_proposals > 0:
+            try:
+                from app.ingestion.dossier_generator import update_all_party_dossiers
+                update_all_party_dossiers(db)
+            except Exception as de:
+                print(f"[Scheduler] AI Dossier generation warning: {de}")
 
         # Record Ingestion Log
         log_entry = IngestionLog(
@@ -298,21 +307,16 @@ def _poll_scheduler_job():
     finally:
         db.close()
 
-def _scheduler_job():
-    """Wrapper for background scheduler thread."""
-    import asyncio
-    try:
-        print("[Scheduler Job] Starting scheduled 10-minute continuous pipeline scan...")
-        asyncio.run(run_pipeline_scan())
-        print("[Scheduler Job] Scheduled 10-minute continuous pipeline scan completed successfully.")
-    except Exception as e:
-        print(f"[Scheduler Job Error] Pipeline scan failed: {e}")
+async def _async_poll_scheduler_job():
+    """Asynchronous wrapper that offloads synchronous polling network I/O to a worker thread."""
+    await asyncio.to_thread(_poll_scheduler_job)
 
 def start_scheduler():
     """Starts the continuous 24/7 background scheduler (running every 10 minutes)."""
     if settings.ENABLE_AUTO_SCHEDULER and not scheduler.running:
+        # AsyncIOScheduler schedules async coroutines natively without blocking the FastAPI event loop
         scheduler.add_job(
-            _scheduler_job,
+            run_pipeline_scan,
             "cron",
             minute="*/10",
             second="0",
@@ -320,7 +324,7 @@ def start_scheduler():
             replace_existing=True
         )
         scheduler.add_job(
-            _poll_scheduler_job,
+            _async_poll_scheduler_job,
             "cron",
             minute="*/10",
             second="30",
@@ -344,7 +348,7 @@ def get_scheduler_status():
         if job and job.next_run_time:
             next_run = job.next_run_time.isoformat()
             
-    server_now = datetime.datetime.utcnow().isoformat() + "Z"
+    server_now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None).isoformat() + "Z"
 
     return {
         "is_active": is_active,

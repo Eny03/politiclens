@@ -112,11 +112,24 @@ export function ProposalDetailModal({ proposal, isOpen, onClose }: ProposalDetai
             </p>
           </div>
 
-          {/* Economic Impact Grid */}
+          {/* Explanatory Banner: Clear Separation of Economic Feasibility vs Statement Truthfulness */}
+          <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-800 flex items-start gap-2.5 text-xs text-slate-600 dark:text-slate-400">
+            <Info className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
+            <p className="leading-relaxed">
+              <strong className="text-slate-900 dark:text-slate-200">Nota metodologica:</strong> PoliticLens distingue rigorosamente tra la <em>fattibilità economica</em> della proposta (presenza di coperture finanziarie ai sensi dell'Art. 81 Cost.) e la <em>veridicità delle affermazioni</em> (correttezza di dati e statistiche citate rispetto a ISTAT ed Eurostat).
+            </p>
+          </div>
+
+          {/* Section 1: Economic Feasibility of the Proposal (Art. 81 Cost.) */}
           <div className="space-y-3">
-            <div className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-              <Coins className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-              <span>Quadro Finanziario & Sostenibilità</span>
+            <div className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <Coins className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                <span>1. Fattibilità Economica della Proposta (Art. 81 Cost.)</span>
+              </div>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200/50 dark:border-emerald-800/50 font-semibold">
+                Coperture & Bilancio
+              </span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -130,7 +143,7 @@ export function ProposalDetailModal({ proposal, isOpen, onClose }: ProposalDetai
               </div>
 
               <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-800 space-y-1">
-                <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">Coperture di Bilancio</span>
+                <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">Coperture Finanziarie</span>
                 <p className="text-sm font-medium text-slate-800 dark:text-slate-200">
                   {proposal.coperture_dichiarate && !proposal.coperture_dichiarate.toLowerCase().includes("non specificat")
                     ? proposal.coperture_dichiarate 
@@ -143,7 +156,7 @@ export function ProposalDetailModal({ proposal, isOpen, onClose }: ProposalDetai
               <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-800 space-y-1">
                 <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 flex items-center gap-1">
                   <Scale className="w-3.5 h-3.5 text-slate-400" />
-                  <span>Valutazione di Sostenibilità Finanziaria</span>
+                  <span>Sostenibilità di Bilancio (Quadro MEF / UPB)</span>
                 </span>
                 <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
                   {proposal.fattibilita_finanziaria}
@@ -152,13 +165,13 @@ export function ProposalDetailModal({ proposal, isOpen, onClose }: ProposalDetai
             )}
           </div>
 
-          {/* Independent Fact-Check */}
+          {/* Section 2: Statement Truthfulness (Factual Accuracy of Claims) */}
           <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 space-y-3">
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                <ShieldCheck className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                 <span className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                  Verifica Fattuale di Veridicità
+                  2. Veridicità delle Affermazioni (Riscontro Dati ISTAT)
                 </span>
               </div>
               <StatusBadge status={proposal.fact_check_status} score={proposal.truth_score} size="md" />

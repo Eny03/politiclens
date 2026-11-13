@@ -42,8 +42,10 @@ def list_parties(db: Session = Depends(get_db)):
             description=p.description,
             dossier_ai=p.dossier_ai,
             poll_percentage=p.poll_percentage or 0.0,
+            previous_poll_percentage=p.previous_poll_percentage or 0.0,
             poll_trend=p.poll_trend or "stabile",
             poll_sources=p.poll_sources or "Media YouTrend/AGI, SWG, Ipsos, Tecnè, Noto",
+            last_poll_date=p.last_poll_date,
             truthfulness_score=p.truthfulness_score or 0.0,
             financial_reliability_score=p.financial_reliability_score or 0.0,
             proposals_count=count
@@ -68,7 +70,11 @@ def get_party_detail(party_code_or_id: str, db: Session = Depends(get_db)):
     if not party:
         raise HTTPException(status_code=404, detail="Partito politico non trovato")
 
-    # If dossier is not generated yet, synthesize it now
+    proposals = db.query(PoliticalProposal).filter(
+        (PoliticalProposal.party_id == party.id) | (PoliticalProposal.partito.ilike(f"%{party.name}%"))
+    ).order_by(PoliticalProposal.timestamp.desc()).all()
+
+    # If dossier is not generated yet or proposal count has changed, synthesize it now
     dossier_dict = None
     if party.dossier_ai:
         try:
@@ -76,17 +82,14 @@ def get_party_detail(party_code_or_id: str, db: Session = Depends(get_db)):
         except Exception:
             dossier_dict = None
 
-    if not dossier_dict:
+    cached_count = dossier_dict.get("statistiche_atti", {}).get("totale_atti", 0) if dossier_dict else 0
+    if not dossier_dict or cached_count != len(proposals):
         try:
             dossier_dict = generate_party_dossier(party, db)
             party.dossier_ai = json.dumps(dossier_dict, ensure_ascii=False)
             db.commit()
         except Exception as e:
             print(f"[PartiesAPI] Error generating dynamic dossier: {e}")
-
-    proposals = db.query(PoliticalProposal).filter(
-        (PoliticalProposal.party_id == party.id) | (PoliticalProposal.partito.ilike(f"%{party.name}%"))
-    ).order_by(PoliticalProposal.timestamp.desc()).all()
 
     # Topic distribution
     topic_counts = {}

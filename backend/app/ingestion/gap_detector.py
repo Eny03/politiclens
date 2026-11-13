@@ -117,7 +117,7 @@ def detect_information_gaps(db: Session, max_gaps: int = 6) -> List[Dict[str, An
             party_total_counts[p_name] = party_total_counts.get(p_name, 0) + 1
 
     gap_candidates = []
-    now = datetime.datetime.utcnow()
+    now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
     cycle_seed = (now.hour * 6 + now.minute // 10)
     
     for party in parties:
@@ -160,12 +160,12 @@ def detect_information_gaps(db: Session, max_gaps: int = 6) -> List[Dict[str, An
                 # Use disambiguated search name for parties whose name is a common word (e.g. ORA!)
                 search_name = "Movimento ORA!" if p_name == "ORA!" else p_name
 
-                # Crisp, high-yield search queries tailored for search engines
+                # Clean, high-yield search queries tailored for search engines without restrictive quote wrapping
                 queries = [
-                    f'"{search_name}" {topic} proposta',
-                    f'"{anchor}" {k1} ddl',
-                    f'"{search_name}" {topic} disegno di legge',
-                    f'"{search_name}" programma {k2}'
+                    f"{search_name} {topic} proposte",
+                    f"{search_name} {k1} ddl",
+                    f"{search_name} {topic} riforma",
+                    f"{search_name} programma {k2}"
                 ]
                 if party.official_website:
                     domain = urllib.parse.urlparse(party.official_website).netloc.replace("www.", "")
@@ -409,7 +409,7 @@ async def autonomous_targeted_gap_search(db: Session, max_gaps: int = 6) -> Dict
                         matching_comm.coperture_dichiarate = comm["coperture"]
                         matching_comm.fattibilita_finanziaria = feasibility
                         matching_comm.fact_check_status = status
-                        matching_comm.timestamp = art.get("published_at", datetime.datetime.utcnow())
+                        matching_comm.timestamp = art.get("published_at", datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None))
                         db.add(AuditLog(
                             event_type="modifica",
                             entity_type="programma",
@@ -419,7 +419,7 @@ async def autonomous_targeted_gap_search(db: Session, max_gaps: int = 6) -> Dict
                             new_value=comm["sintesi"][:90] + "..." if len(comm["sintesi"]) > 90 else comm["sintesi"],
                             agent_responsible="PolicyMergerAgent",
                             details=f"Modifica proposta per {p_name} ({topic}) da riscontro web: '{comm['sintesi']}'.",
-                            timestamp=datetime.datetime.utcnow()
+                            timestamp=datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
                         ))
                         total_added_or_updated += 1
                         proposals_added_for_topic += 1
@@ -445,7 +445,7 @@ async def autonomous_targeted_gap_search(db: Session, max_gaps: int = 6) -> Dict
                         raw_text=raw_text,
                         content_hash=item_hash,
                         embedding=emb_json,
-                        timestamp=art.get("published_at", datetime.datetime.utcnow())
+                        timestamp=art.get("published_at", datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None))
                     )
                     db.add(record)
                     db.flush()
@@ -458,7 +458,7 @@ async def autonomous_targeted_gap_search(db: Session, max_gaps: int = 6) -> Dict
                         new_value=record.dichiarazione_sintesi[:90] + "..." if len(record.dichiarazione_sintesi) > 90 else record.dichiarazione_sintesi,
                         agent_responsible="PolicyDistillerAgent",
                         details=f"Aggiunta proposta per {p_name} ({topic}) tramite ricerca mirata: '{record.dichiarazione_sintesi}'.",
-                        timestamp=datetime.datetime.utcnow()
+                        timestamp=datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
                     ))
                     total_added_or_updated += 1
                     proposals_added_for_topic += 1
@@ -509,7 +509,7 @@ async def autonomous_targeted_gap_search(db: Session, max_gaps: int = 6) -> Dict
                             new_value=item.dichiarazione_sintesi[:90] + "..." if len(item.dichiarazione_sintesi) > 90 else item.dichiarazione_sintesi,
                             agent_responsible="PolicyMergerAgent",
                             details=f"Modifica proposta per {item.partito} ({item.macro_argomento}): '{item.dichiarazione_sintesi}'.",
-                            timestamp=datetime.datetime.utcnow()
+                            timestamp=datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
                         ))
                         total_added_or_updated += 1
                         gap_filled_for_this_topic = True
@@ -548,7 +548,7 @@ async def autonomous_targeted_gap_search(db: Session, max_gaps: int = 6) -> Dict
                             new_value=new_prop.dichiarazione_sintesi[:90] + "..." if len(new_prop.dichiarazione_sintesi) > 90 else new_prop.dichiarazione_sintesi,
                             agent_responsible="PolicyDistillerAgent",
                             details=f"Aggiunta proposta per {item.partito} ({item.macro_argomento}): '{new_prop.dichiarazione_sintesi}'.",
-                            timestamp=datetime.datetime.utcnow()
+                            timestamp=datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
                         ))
                         total_added_or_updated += 1
                         proposals_added_for_topic += 1

@@ -285,7 +285,14 @@ function DashboardContent() {
       setDetectedGaps(gapsData);
 
       // Determine real poll timestamp and persist to local storage
-      const pollTimeStr = statsData.last_poll_time || (partiesData[0]?.poll_sources?.includes("Rilevazione") ? partiesData[0].poll_sources.split("Rilevazione")[1].replace(/[()]/g, "").trim() : "");
+      const extractPollTime = (statsTime?: string | null, src?: string | null) => {
+        if (statsTime && statsTime.trim()) return statsTime;
+        const s = src || "";
+        if (s.includes("Aggiornato al")) return s.split("Aggiornato al")[1].replace(/[()]/g, "").trim();
+        if (s.includes("Rilevazione")) return s.split("Rilevazione")[1].replace(/[()]/g, "").trim();
+        return new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
+      };
+      const pollTimeStr = extractPollTime(statsData.last_poll_time, partiesData[0]?.poll_sources);
       if (pollTimeStr) {
         setLastPollTime(pollTimeStr);
       }
@@ -326,7 +333,8 @@ function DashboardContent() {
         ]);
         setStats(statsData);
         setParties(partiesData);
-        const pollTimeStr = statsData.last_poll_time || (partiesData[0]?.poll_sources?.includes("Rilevazione") ? partiesData[0].poll_sources.split("Rilevazione")[1].replace(/[()]/g, "").trim() : new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }));
+        const s = partiesData[0]?.poll_sources || "";
+        const pollTimeStr = statsData.last_poll_time || (s.includes("Aggiornato al") ? s.split("Aggiornato al")[1].replace(/[()]/g, "").trim() : (s.includes("Rilevazione") ? s.split("Rilevazione")[1].replace(/[()]/g, "").trim() : new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })));
         setLastPollTime(pollTimeStr);
         try {
           localStorage.setItem("politiclens_cached_stats", JSON.stringify(statsData));
@@ -377,7 +385,8 @@ function DashboardContent() {
       ]);
       setStats(statsData);
       setParties(partiesData);
-      const pollTimeStr = statsData.last_poll_time || (partiesData[0]?.poll_sources?.includes("Rilevazione") ? partiesData[0].poll_sources.split("Rilevazione")[1].replace(/[()]/g, "").trim() : new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }));
+      const s = partiesData[0]?.poll_sources || "";
+      const pollTimeStr = statsData.last_poll_time || (s.includes("Aggiornato al") ? s.split("Aggiornato al")[1].replace(/[()]/g, "").trim() : (s.includes("Rilevazione") ? s.split("Rilevazione")[1].replace(/[()]/g, "").trim() : new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })));
       setLastPollTime(pollTimeStr);
       try {
         localStorage.setItem("politiclens_cached_stats", JSON.stringify(statsData));
@@ -597,10 +606,12 @@ function DashboardContent() {
   // Recharts Poll Data (Pure Electoral Polls - ALL 22 PARTIES)
   const pollChartData = filteredRankings.map((p: any) => {
     const partyMatch = parties.find((party) => party.code === p.code || party.name === p.name);
+    const prevVal = p.previous_poll_percentage ?? partyMatch?.previous_poll_percentage ?? p.poll_percentage;
     return {
       name: p.code || p.name.slice(0, 8),
       fullName: p.name,
       poll: p.poll_percentage,
+      previousPoll: prevVal,
       trend: p.poll_trend || partyMatch?.poll_trend || "stabile",
       sources: partyMatch?.poll_sources || "Media YouTrend/SWG/Ipsos",
       color: p.color
@@ -641,26 +652,26 @@ function DashboardContent() {
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto px-4 sm:px-6 py-4">
-      {/* 1. HERO BANNER (Light, Clean & High-End Editorial Style) */}
+      {/* 1. HERO BANNER: Focus on Manifesto, Political Ideas & Real Policies */}
       <section className="relative overflow-hidden rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-6 sm:p-8 shadow-2xs">
         <div className="relative z-10 max-w-3xl space-y-3">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 text-xs font-semibold">
             <Sparkles className="w-3.5 h-3.5" />
-            <span>Piattaforma Civica in Continua Evoluzione Autonoma</span>
+            <span>Il Manifesto delle Idee Politiche Italiane</span>
           </div>
 
           <h1 className="text-2xl sm:text-4xl font-black text-slate-900 dark:text-white tracking-tight leading-tight">
-            PoliticLens: Idee Politiche in Tempo Reale, Trasparenza e Fatti Verificati.
+            PoliticLens: Esplora e Confronta le Idee e i Programmi di Tutti i Partiti.
           </h1>
 
           <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed max-w-2xl">
-            Osservatorio indipendente e neutrale: monitoraggio in tempo reale e in continuo aggiornamento autonomo per permettere a tutti i cittadini di osservare le idee politiche, confrontarle e verificarne la sostenibilità economica.
+            Osservatorio civico neutrale e indipendente: raccoglie e indicizza le proposte di legge, le posizioni e i manifesti politici in tempo reale. Consente ai cittadini di confrontare le visioni politiche, con scheda tecnica di fattibilità economica (Art. 81 Cost.) e veridicità delle affermazioni su dati Istat.
           </p>
         </div>
       </section>
 
 
-      {/* 2. STATS OVERVIEW CARDS (WITH SKELETONS) */}
+      {/* 2. STATS OVERVIEW CARDS: Focus on Ideas, Parties, Topics, and Technical Feasibility */}
       <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {loading ? (
           Array.from({ length: 4 }).map((_, i) => (
@@ -708,43 +719,58 @@ function DashboardContent() {
               </div>
             )}
 
+            {/* Card 1: Idee e Riforme del Manifesto */}
             <div className="bg-white dark:bg-slate-900 p-3.5 sm:p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs transition-all">
-              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Posizioni Censite</div>
+              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Idee & Proposte di Policy</div>
               <div className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white mt-0.5">
                 {currentDashboardMetrics.totalProposals}
               </div>
               <p className="text-[10px] text-slate-500 mt-0.5">
-                {currentDashboardMetrics.isFiltered ? `Atti censiti per ${currentDashboardMetrics.title}` : "Atti parlamentari & dichiarazioni"}
+                {currentDashboardMetrics.isFiltered ? `Atti censiti per ${currentDashboardMetrics.title}` : "Disegni di legge & atti programmatici"}
               </p>
             </div>
 
+            {/* Card 2: Forze Mappate */}
             <div className="bg-white dark:bg-slate-900 p-3.5 sm:p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs transition-all">
               <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Forze Mappate</div>
               <div className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white mt-0.5">
                 {currentDashboardMetrics.totalParties}
               </div>
               <p className="text-[10px] text-slate-500 mt-0.5">
-                {currentDashboardMetrics.isFiltered ? `Consenso totale: ${currentDashboardMetrics.totalPoll}%` : "Parlamentari & civiche"}
+                {currentDashboardMetrics.isFiltered ? `Consenso totale: ${currentDashboardMetrics.totalPoll}%` : "Partiti di governo, opposizione e civici"}
               </p>
             </div>
 
+            {/* Card 3: Macro-Aree di Riforma */}
             <div className="bg-white dark:bg-slate-900 p-3.5 sm:p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs transition-all">
-              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Media Veridicità</div>
-              <div className="text-xl sm:text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-0.5">
-                {currentDashboardMetrics.avgTruth}%
-              </div>
-              <p className="text-[10px] text-slate-500 mt-0.5">
-                {currentDashboardMetrics.isFiltered ? "Ponderata sul peso elettorale della coalizione" : "Fact-checking: aderenza a dati e fatti reali"}
-              </p>
-            </div>
-
-            <div className="bg-white dark:bg-slate-900 p-3.5 sm:p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs transition-all">
-              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Coperture Economiche</div>
+              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Aree Tematiche di Policy</div>
               <div className="text-xl sm:text-2xl font-black text-blue-600 dark:text-blue-400 mt-0.5">
-                {currentDashboardMetrics.avgFinance}%
+                11 Macro-Aree
               </div>
               <p className="text-[10px] text-slate-500 mt-0.5">
-                {currentDashboardMetrics.isFiltered ? "Affidabilità e sostenibilità media della coalizione" : "Proposte con fonti di finanziamento indicate"}
+                Fisco, Lavoro, Sanità, Pensioni, Giustizia e altre
+              </p>
+            </div>
+
+            {/* Card 4: Scheda Tecnica (Veridicità & Coperture di Bilancio) */}
+            <div className="bg-white dark:bg-slate-900 p-3.5 sm:p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs transition-all">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Quadro Tecnico & Risorse</div>
+              <div className="flex items-baseline gap-2 mt-0.5">
+                <span className="text-lg sm:text-xl font-black text-emerald-600 dark:text-emerald-400" title="Veridicità media delle affermazioni (confronto Istat)">
+                  {currentDashboardMetrics.avgTruth}%
+                </span>
+                <span className="text-xs text-slate-300 dark:text-slate-700">•</span>
+                <span className="text-lg sm:text-xl font-black text-blue-600 dark:text-blue-400" title="Coperture di bilancio (Art. 81 Cost.)">
+                  {currentDashboardMetrics.avgFinance}%
+                </span>
+                {stats?.truthfulness_trend && (
+                  <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-1.5 py-0.2 rounded ml-auto">
+                    {stats.truthfulness_trend} sett.
+                  </span>
+                )}
+              </div>
+              <p className="text-[10px] text-slate-500 mt-0.5 truncate">
+                Dati veritieri vs coperture ex Art. 81 Cost.
               </p>
             </div>
 
@@ -764,7 +790,7 @@ function DashboardContent() {
             }`}
           >
             <FileText className={`w-4 h-4 ${activeTab === "proposte" ? "text-blue-600 dark:text-blue-400" : ""}`} />
-            <span>Riforme & Posizioni</span>
+            <span>Manifesto & Idee</span>
             <span className="text-[10px] px-1.5 py-0.5 rounded-md font-semibold bg-blue-50 text-blue-800 dark:bg-blue-950 dark:text-blue-300">
               {filteredProposals.length}
             </span>
@@ -779,9 +805,9 @@ function DashboardContent() {
             }`}
           >
             <TrendingUp className={`w-4 h-4 ${activeTab === "sondaggi" ? "text-emerald-600 dark:text-emerald-400" : ""}`} />
-            <span>Sondaggi & Grafici</span>
+            <span>Sondaggi Nazionali</span>
             <span className="text-[10px] px-1.5 py-0.5 rounded-md font-semibold bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
-              Recharts
+              Media 6 Istituti
             </span>
           </button>
 
@@ -794,9 +820,9 @@ function DashboardContent() {
             }`}
           >
             <ShieldCheck className={`w-4 h-4 ${activeTab === "statistiche" ? "text-amber-600 dark:text-amber-400" : ""}`} />
-            <span>Veridicità & Coperture</span>
+            <span>Quadro Tecnico & Risorse</span>
             <span className="text-[10px] px-1.5 py-0.5 rounded-md font-semibold bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-300">
-              Partito per Partito
+              Art. 81 vs Istat
             </span>
           </button>
         </div>
@@ -1062,11 +1088,15 @@ function DashboardContent() {
                                     <span>{data.fullName}</span>
                                   </div>
                                   <div className="flex items-baseline justify-between pt-1 border-t border-slate-800">
-                                    <span className="text-slate-400 text-xs">Intenzioni di Voto:</span>
+                                    <span className="text-slate-400 text-xs">Rilevazione Attuale:</span>
                                     <span className="text-lg font-black text-white font-mono">{data.poll}%</span>
                                   </div>
                                   <div className="flex items-center justify-between text-[11px]">
-                                    <span className="text-slate-400">Trend Settimanale:</span>
+                                    <span className="text-slate-400">Rilevazione Precedente:</span>
+                                    <span className="font-semibold text-slate-300 font-mono">{data.previousPoll ?? data.poll}%</span>
+                                  </div>
+                                  <div className="flex items-center justify-between text-[11px]">
+                                    <span className="text-slate-400">Variazione vs Precedente:</span>
                                     <span className={`font-bold px-1.5 py-0.2 rounded ${
                                       data.trend?.includes("+")
                                         ? "bg-emerald-950 text-emerald-400"
@@ -1130,8 +1160,9 @@ function DashboardContent() {
                         </div>
                       </div>
 
-                      <div className="w-20 shrink-0 text-right flex items-center justify-end gap-1.5">
+                      <div className="w-28 shrink-0 text-right flex items-center justify-end gap-1.5">
                         <span className="font-black text-xs sm:text-sm font-mono text-slate-900 dark:text-white">{item.poll}%</span>
+                        <span className="text-[10px] text-slate-400 font-mono">(prec: {item.previousPoll ?? item.poll}%)</span>
                         <span className={`text-[10px] font-bold px-1 rounded ${
                           item.trend?.includes("+")
                             ? "text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60"
@@ -1153,7 +1184,8 @@ function DashboardContent() {
               {filteredRankings.map((item, idx) => {
                 const partyMatch = parties.find((p) => p.code === item.code || p.name === item.name);
                 const trendStr = item.poll_trend || partyMatch?.poll_trend || "stabile";
-                const sourceStr = partyMatch?.poll_sources || "Media mobile YouTrend / SWG / Ipsos";
+                const prevPct = item.previous_poll_percentage ?? partyMatch?.previous_poll_percentage ?? item.poll_percentage;
+                const sourceStr = partyMatch?.poll_sources || "Media ponderata 6 istituti (SWG, YouTrend/AGI, Ipsos, Tecnè, BiDiMedia, Noto)";
                 
                 return (
                   <Link
@@ -1178,6 +1210,9 @@ function DashboardContent() {
                         <div className="text-right shrink-0">
                           <div className="text-lg font-black text-slate-900 dark:text-white font-mono leading-none">
                             {item.poll_percentage}%
+                          </div>
+                          <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                            Prec: {prevPct}%
                           </div>
                           <span className={`inline-block text-[10px] font-bold px-1.5 py-0.2 rounded mt-1 ${
                             trendStr.includes("+")

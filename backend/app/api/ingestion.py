@@ -107,7 +107,7 @@ async def ingest_manual(req: IngestionRequest, db: Session = Depends(get_db)):
         text=text,
         url=url,
         title=title,
-        published_at=datetime.datetime.utcnow()
+        published_at=datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
     )
     
     saved_proposals = []
@@ -140,7 +140,7 @@ async def ingest_manual(req: IngestionRequest, db: Session = Depends(get_db)):
                 url=url,
                 title=title,
                 source_name="Inserimento Diretto / Scraper",
-                published_at=datetime.datetime.utcnow(),
+                published_at=datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None),
                 raw_text=text[:2000],
                 content_hash=content_hash,
                 emb_json=emb_json
@@ -168,7 +168,7 @@ async def ingest_manual(req: IngestionRequest, db: Session = Depends(get_db)):
                 raw_text=text[:2000],
                 content_hash=content_hash,
                 embedding=emb_json,
-                timestamp=datetime.datetime.utcnow()
+                timestamp=datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
             )
             db.add(proposal_record)
             db.commit()

@@ -92,20 +92,43 @@ class LLMProvider:
         if settings.GEMINI_API_KEY:
             try:
                 contents = []
-                for m in all_messages:
-                    role = "user" if m["role"] in ["user", "system"] else "model"
-                    contents.append({
-                        "role": role,
-                        "parts": [{"text": m["content"]}]
-                    })
+                system_instruction = {"parts": [{"text": system_prompt}]} if system_prompt else None
+                last_role = None
+                for m in messages:
+                    if m["role"] == "system":
+                        if not system_instruction:
+                            system_instruction = {"parts": [{"text": m["content"]}]}
+                        continue
+                    role = "user" if m["role"] == "user" else "model"
+                    if role == last_role and contents:
+                        contents[-1]["parts"].append({"text": m["content"]})
+                    else:
+                        contents.append({
+                            "role": role,
+                            "parts": [{"text": m["content"]}]
+                        })
+                        last_role = role
+
+                if not contents:
+                    contents.append({"role": "user", "parts": [{"text": "Sintesi"}]})
+
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/{settings.GEMINI_MODEL}:generateContent?key={settings.GEMINI_API_KEY}"
+                payload = {
+                    "contents": contents,
+                    "generationConfig": {"temperature": temperature}
+                }
+                if system_instruction:
+                    payload["system_instruction"] = system_instruction
+
                 async with httpx.AsyncClient(timeout=25.0) as client:
-                    res = await client.post(url, json={"contents": contents, "generationConfig": {"temperature": temperature}})
+                    res = await client.post(url, json=payload)
                     if res.status_code == 200:
                         data = res.json()
                         text = data["candidates"][0]["content"]["parts"][0]["text"]
                         if text:
                             return text, "gemini"
+                    else:
+                        print(f"[LLMProvider] Gemini error status {res.status_code}: {res.text[:200]}")
             except Exception as e:
                 print(f"[LLMProvider] Gemini call error: {e}")
 
@@ -193,15 +216,36 @@ class LLMProvider:
         if settings.GEMINI_API_KEY:
             try:
                 contents = []
-                for m in all_messages:
-                    role = "user" if m["role"] in ["user", "system"] else "model"
-                    contents.append({
-                        "role": role,
-                        "parts": [{"text": m["content"]}]
-                    })
+                system_instruction = {"parts": [{"text": system_prompt}]} if system_prompt else None
+                last_role = None
+                for m in messages:
+                    if m["role"] == "system":
+                        if not system_instruction:
+                            system_instruction = {"parts": [{"text": m["content"]}]}
+                        continue
+                    role = "user" if m["role"] == "user" else "model"
+                    if role == last_role and contents:
+                        contents[-1]["parts"].append({"text": m["content"]})
+                    else:
+                        contents.append({
+                            "role": role,
+                            "parts": [{"text": m["content"]}]
+                        })
+                        last_role = role
+
+                if not contents:
+                    contents.append({"role": "user", "parts": [{"text": "Sintesi"}]})
+
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/{settings.GEMINI_MODEL}:streamGenerateContent?alt=sse&key={settings.GEMINI_API_KEY}"
+                payload = {
+                    "contents": contents,
+                    "generationConfig": {"temperature": temperature}
+                }
+                if system_instruction:
+                    payload["system_instruction"] = system_instruction
+
                 async with httpx.AsyncClient(timeout=60.0) as client:
-                    async with client.stream("POST", url, json={"contents": contents, "generationConfig": {"temperature": temperature}}) as response:
+                    async with client.stream("POST", url, json=payload) as response:
                         if response.status_code == 200:
                             async for raw_line in response.aiter_lines():
                                 line = raw_line.strip()

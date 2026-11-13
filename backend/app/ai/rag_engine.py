@@ -10,7 +10,13 @@ from app.schemas import ChatQueryRequest, ChatQueryResponse, CitationItem
 from app.ai.embeddings import get_text_embedding, cosine_similarity
 from app.ai.llm_provider import llm_provider
 
-RAG_SYSTEM_PROMPT = """Sei PoliticLens AI, la piattaforma di intelligence politica ed economico-finanziaria per l'Italia.
+# FIX RAG-01: system prompt now includes current date so the AI knows its temporal context.
+# Cross-platform safe date formatting (avoiding GNU %-d which crashes with ValueError on Windows CRT).
+def _build_rag_system_prompt() -> str:
+    now = datetime.datetime.now(datetime.timezone.utc)
+    today = f"{now.day} {now.strftime('%B %Y')}"
+    return f"""Sei PoliticLens AI, la piattaforma di intelligence politica ed economico-finanziaria per l'Italia.
+Data corrente: {today}. XIX Legislatura in corso (2022-2027).
 Rispondi con tono istituzionale, neutrale, autorevole ed enciclopedico.
 Regole inderogabili:
 1. Neutralità algoritmica assoluta: tratta maggioranza e opposizione con pari dignità e spazio.
@@ -18,6 +24,25 @@ Regole inderogabili:
 3. Continuità storica: se l'utente chiede evoluzioni o cita date (2022-2026), illustra la traiettoria temporale degli atti e delle dichiarazioni.
 4. Formattazione: usa Markdown pulito (titoli ###, elenchi puntati, tabelle o sezioni chiare con emoji istituzionali 🏛️, 📊, 🔵, 🔴, ⚖️).
 5. Se l'utente pone una domanda di follow-up o fa riferimento alla conversazione precedente, mantieni coerenza contestuale."""
+
+# Keep a module-level constant as well for cases where the function is not called
+RAG_SYSTEM_PROMPT = _build_rag_system_prompt()
+
+# FIX PERF-03: module-level embedding cache to avoid re-deserializing JSON on every query.
+# Maps proposal.id → deserialized List[float]. Grows to at most ~500 entries (~750KB).
+_embedding_cache: Dict[int, List[float]] = {}
+
+def _get_embedding_cached(prop: PoliticalProposal) -> List[float]:
+    """Returns deserialized embedding for a proposal, using in-memory LRU cache."""
+    if prop.id not in _embedding_cache:
+        if prop.embedding:
+            try:
+                _embedding_cache[prop.id] = json.loads(prop.embedding)
+            except Exception:
+                _embedding_cache[prop.id] = []
+        else:
+            _embedding_cache[prop.id] = []
+    return _embedding_cache[prop.id]
 
 PARTY_KEYWORDS = {
     "Fratelli d'Italia": ["fratelli d'italia", "fdi", "giorgia meloni", "meloni"],
@@ -59,7 +84,8 @@ def detect_entities_and_topics(query: str) -> Tuple[List[str], List[str]]:
     matched_parties = []
     for party, keys in PARTY_KEYWORDS.items():
         for k in keys:
-            pattern = r"(?:\b|^)" + re.escape(k) + r"(?:\b|$)"
+            # FIX RAG-05: use Unicode-aware boundaries instead of \b which breaks on accented Italian chars
+            pattern = r"(?<![a-zA-ZÀ-ÿ\d])" + re.escape(k) + r"(?![a-zA-ZÀ-ÿ\d])"
             if re.search(pattern, q_low):
                 matched_parties.append(party)
                 break
@@ -67,19 +93,46 @@ def detect_entities_and_topics(query: str) -> Tuple[List[str], List[str]]:
     matched_topics = []
     for topic, keys in TOPIC_KEYWORDS.items():
         for k in keys:
-            pattern = r"(?:\b|^)" + re.escape(k) + r"(?:\b|$)"
+            # FIX RAG-05: Unicode-aware boundaries for Italian accented characters
+            pattern = r"(?<![a-zA-ZÀ-ÿ\d])" + re.escape(k) + r"(?![a-zA-ZÀ-ÿ\d])"
             if re.search(pattern, q_low):
                 matched_topics.append(topic)
                 break
             
     return matched_parties, matched_topics
 
+# FIX AI-05: extracted _is_poll_query() helper to avoid 3x code duplication across the module
+def _is_poll_query(q_low: str) -> bool:
+    """Returns True if the query is asking about electoral polls or coalition vote shares."""
+    return (
+        any(w in q_low for w in ["sondagg", "intenzion", "barometro", "elettorali", "voto"]) or
+        (any(w in q_low for w in ["somma", "totale", "quanto fanno", "quanto hanno", "chi è avanti", "chi vince", "differenziale", "distacco", "percentual", "percentuale"]) and
+         any(w in q_low for w in ["cdx", "csx", "coalizion", "centrodestra", "centrosinistra", "campo largo", "destra", "sinistra", "partiti"]))
+    )
+
+def _trim_history(history: Optional[List[Any]], max_chars: int = 3500) -> List[Dict[str, str]]:
+    """FIX RAG-02: trims conversational memory to respect LLM context token boundaries."""
+    if not history:
+        return []
+    trimmed = []
+    total_chars = 0
+    for h in reversed(history):
+        content = h.content if hasattr(h, "content") else (h.get("content", "") if isinstance(h, dict) else "")
+        role = h.role if hasattr(h, "role") else (h.get("role", "user") if isinstance(h, dict) else "user")
+        if total_chars + len(content) > max_chars and trimmed:
+            break
+        trimmed.insert(0, {"role": role, "content": content})
+        total_chars += len(content)
+        if len(trimmed) >= 8:
+            break
+    return trimmed
+
 async def _retrieve_and_prepare_context(req: ChatQueryRequest, db: Session):
     matched_parties, matched_topics = detect_entities_and_topics(req.question)
     query_vec = await get_text_embedding(req.question)
     
     q_low = req.question.lower()
-    now = datetime.datetime.utcnow()
+    now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
     years_in_query = re.findall(r"\b(202[2-9]|203[0-9])\b", req.question)
     wants_evolution = any(w in q_low for w in [
         "cambiat", "evoluzione", "storia", "storico", "passat", "ieri", "prima", "tempo", 
@@ -87,7 +140,31 @@ async def _retrieve_and_prepare_context(req: ChatQueryRequest, db: Session):
         "aggiornat", "oggi", "nel tempo", "storica", "traiettoria"
     ] + [str(y) for y in range(2022, now.year + 4)])
     
-    all_proposals = db.query(PoliticalProposal).all()
+    # FIX AI-01 + RAG-03: SQL pre-filtering using composite index when filters or matched entities exist
+    target_parties = [req.filter_party] if req.filter_party else matched_parties
+    target_topics = [req.filter_macro_argomento] if req.filter_macro_argomento else matched_topics
+
+    if target_parties or target_topics:
+        query = db.query(PoliticalProposal)
+        if target_parties and target_topics:
+            query = query.filter(
+                (PoliticalProposal.partito.in_(target_parties)) | 
+                (PoliticalProposal.macro_argomento.in_(target_topics))
+            )
+        elif target_parties:
+            query = query.filter(PoliticalProposal.partito.in_(target_parties))
+        elif target_topics:
+            query = query.filter(PoliticalProposal.macro_argomento.in_(target_topics))
+
+        candidate_proposals = query.all()
+        # Fall back to full table scan only if selective filter found too few records to balance view
+        if len(candidate_proposals) >= 12 or req.filter_party or req.filter_macro_argomento:
+            all_proposals = candidate_proposals
+        else:
+            all_proposals = db.query(PoliticalProposal).all()
+    else:
+        all_proposals = db.query(PoliticalProposal).all()
+
     all_parties = {p.name: p for p in db.query(PoliticalParty).all()}
     q_words = [w for w in re.findall(r"\w+", q_low) if len(w) > 2]
     
@@ -113,9 +190,10 @@ async def _retrieve_and_prepare_context(req: ChatQueryRequest, db: Session):
         score += word_matches * 1.2
         
         # 4. Deterministic Embedding Cosine Similarity
-        if prop.embedding:
+        # FIX PERF-03: use module-level cache to avoid re-deserializing JSON on every query
+        emb = _get_embedding_cached(prop)
+        if emb:
             try:
-                emb = json.loads(prop.embedding)
                 sim = cosine_similarity(query_vec, emb)
                 if sim > 0:
                     score += sim * 2.5
@@ -219,41 +297,41 @@ def _build_deterministic_synthesis(ctx: Dict[str, Any], question: str) -> str:
     q_low = ctx["q_low"]
 
     # Direct Electoral Polls & Coalition Sum Analysis
-    is_poll_query = (
-        any(w in q_low for w in ["sondagg", "intenzion", "barometro", "elettorali", "voto"]) or
-        (any(w in q_low for w in ["somma", "totale", "quanto fanno", "quanto hanno", "chi è avanti", "chi vince", "differenziale", "distacco", "percentual", "percentuale"]) and
-         any(w in q_low for w in ["cdx", "csx", "coalizion", "centrodestra", "centrosinistra", "campo largo", "destra", "sinistra", "partiti"]))
-    )
+    # FIX AI-05: use shared _is_poll_query() helper instead of duplicated inline logic
+    is_poll_query = _is_poll_query(q_low)
 
     if is_poll_query:
-        def get_p_poll(name_substring):
+        # FIX AI-04: return None when party not found (not 0.0) so 'or' fallback works correctly
+        # for genuinely zero-polling parties vs "not found" parties.
+        def get_p_poll(name_substring: str, default: float = 0.0) -> float:
             for p_name, p_obj in all_parties.items():
                 if name_substring.lower() in p_name.lower() or name_substring.lower() in (p_obj.code or "").lower():
-                    return p_obj.poll_percentage or 0.0
-            return 0.0
+                    pct = p_obj.poll_percentage
+                    return pct if pct is not None else default
+            return default
 
-        fdi = get_p_poll("Fratelli") or 27.9
-        fi = get_p_poll("Forza Italia") or 8.8
-        lega = get_p_poll("Lega") or 8.1
-        nm = get_p_poll("Noi Moderati") or 1.1
+        fdi = get_p_poll("Fratelli", 27.9)
+        fi = get_p_poll("Forza Italia", 8.8)
+        lega = get_p_poll("Lega", 8.1)
+        nm = get_p_poll("Noi Moderati", 1.1)
         cdx_sum = round(fdi + fi + lega + nm, 1)
 
-        futnaz = get_p_poll("Futuro Nazionale") or 6.0
+        futnaz = get_p_poll("Futuro Nazionale", 6.0)
 
-        pd = get_p_poll("Democratico") or 22.2
-        avs = get_p_poll("Verdi e Sinistra") or 6.3
-        piueu = get_p_poll("+Europa") or 1.8
+        pd = get_p_poll("Democratico", 22.2)
+        avs = get_p_poll("Verdi e Sinistra", 6.3)
+        piueu = get_p_poll("+Europa", 1.8)
         csx_sum = round(pd + avs + piueu, 1)
 
-        m5s = get_p_poll("Movimento 5 Stelle") or 11.5
+        m5s = get_p_poll("Movimento 5 Stelle", 11.5)
         cl_sum = round(csx_sum + m5s, 1)
 
-        az = get_p_poll("Azione") or 2.9
-        iv = get_p_poll("Italia Viva") or 2.2
+        az = get_p_poll("Azione", 2.9)
+        iv = get_p_poll("Italia Viva", 2.2)
         centro_sum = round(az + iv, 1)
 
-        ptd = get_p_poll("Pace Terra Dignit") or 1.2
-        scn = get_p_poll("Sud chiama Nord") or 1.0
+        ptd = get_p_poll("Pace Terra Dignit", 1.2)
+        scn = get_p_poll("Sud chiama Nord", 1.0)
 
         poll_lines = [
             f"### 📊 Rilevazione Sondaggi & Media Multi-Istituto delle Coalizioni\n",
@@ -440,11 +518,8 @@ async def answer_rag_query(req: ChatQueryRequest, db: Session) -> ChatQueryRespo
     if provider_info["provider"] != "deterministic" and ctx["top_candidates"]:
         evidence_lines = []
         q_l = req.question.lower()
-        is_poll_q = (
-            any(w in q_l for w in ["sondagg", "intenzion", "barometro", "elettorali", "voto"]) or
-            (any(w in q_l for w in ["somma", "totale", "quanto fanno", "quanto hanno", "chi è avanti", "chi vince", "differenziale", "distacco", "percentual", "percentuale"]) and
-             any(w in q_l for w in ["cdx", "csx", "coalizion", "centrodestra", "centrosinistra", "campo largo", "destra", "sinistra", "partiti"]))
-        )
+        # FIX AI-05: use shared _is_poll_query() helper (deduplicated from 3 inline copies)
+        is_poll_q = _is_poll_query(q_l)
         if is_poll_q:
             evidence_lines.append(f"DATI UFFICIALI SONDAGGI E SOMMA COALIZIONI:\n{fallback_text}\n")
         elif any(w in q_l for w in ["media", "medie", "coalizion", "campo largo", "centrodestra"]):
@@ -454,10 +529,7 @@ async def answer_rag_query(req: ChatQueryRequest, db: Session) -> ChatQueryRespo
             evidence_lines.append(f"- [{ts_str}] {p.partito} ({p.macro_argomento}): {p.dichiarazione_sintesi} [Costo: {p.costo_stimato}, Coperture: {p.coperture_dichiarate}, Verifica: {p.fact_check_status}]")
         evidence_text = "\n".join(evidence_lines)
 
-        messages = []
-        if req.history:
-            for h in req.history[-6:]:
-                messages.append({"role": h.role, "content": h.content})
+        messages = _trim_history(req.history)
 
         user_content = f"""DOMANDA UTENTE: "{req.question}"
 DATI VERIFICATI DALL'ARCHIVIO POLITICLENS:
@@ -516,18 +588,12 @@ async def stream_rag_query(req: ChatQueryRequest, db: Session) -> AsyncGenerator
     fallback_text = _build_deterministic_synthesis(ctx, req.question)
     provider_info = await llm_provider.get_active_provider_info()
 
-    messages = []
-    if req.history:
-        for h in req.history[-6:]:
-            messages.append({"role": h.role, "content": h.content})
+    messages = _trim_history(req.history)
 
     evidence_lines = []
     q_l = req.question.lower()
-    is_poll_q = (
-        any(w in q_l for w in ["sondagg", "intenzion", "barometro", "elettorali", "voto"]) or
-        (any(w in q_l for w in ["somma", "totale", "quanto fanno", "quanto hanno", "chi è avanti", "chi vince", "differenziale", "distacco", "percentual", "percentuale"]) and
-         any(w in q_l for w in ["cdx", "csx", "coalizion", "centrodestra", "centrosinistra", "campo largo", "destra", "sinistra", "partiti"]))
-    )
+    # FIX AI-05: use shared _is_poll_query() helper (deduplicated from 3 inline copies)
+    is_poll_q = _is_poll_query(q_l)
     if is_poll_q:
         evidence_lines.append(f"DATI UFFICIALI SONDAGGI E SOMMA COALIZIONI:\n{fallback_text}\n")
     elif any(w in q_l for w in ["media", "medie", "coalizion", "campo largo", "centrodestra"]):

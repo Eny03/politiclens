@@ -1,7 +1,11 @@
 import datetime
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Float
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Float, Index
 from sqlalchemy.orm import relationship
 from app.database import Base
+
+def utcnow():
+    """Returns timezone-naive UTC timestamp for standard DB persistence."""
+    return datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
 
 class PoliticalParty(Base):
     __tablename__ = "political_parties"
@@ -16,13 +20,32 @@ class PoliticalParty(Base):
     description = Column(Text, nullable=True)
     dossier_ai = Column(Text, nullable=True)
     poll_percentage = Column(Float, default=0.0)
+    previous_poll_percentage = Column(Float, default=0.0)
     poll_trend = Column(String(20), default="stabile")
     poll_sources = Column(String(255), default="Media YouTrend/AGI, SWG, Ipsos, Tecnè, Noto")
+    last_poll_date = Column(DateTime, nullable=True)
     truthfulness_score = Column(Float, default=0.0)
     financial_reliability_score = Column(Float, default=0.0)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
     proposals = relationship("PoliticalProposal", back_populates="party_rel")
+    poll_history = relationship("PollMeasurement", back_populates="party_rel", order_by="desc(PollMeasurement.wave_date)")
+
+class PollMeasurement(Base):
+    __tablename__ = "poll_measurements"
+
+    id = Column(Integer, primary_key=True, index=True)
+    party_id = Column(Integer, ForeignKey("political_parties.id"), nullable=True)
+    party_code = Column(String(50), index=True)
+    party_name = Column(String(100), nullable=True)
+    percentage = Column(Float, nullable=False)
+    previous_percentage = Column(Float, default=0.0)
+    delta = Column(Float, default=0.0)
+    trend = Column(String(20), default="stabile")
+    institutes = Column(String(500), nullable=True)
+    wave_date = Column(DateTime, default=utcnow, index=True)
+
+    party_rel = relationship("PoliticalParty", back_populates="poll_history")
 
 class PoliticalProposal(Base):
     __tablename__ = "political_proposals"
@@ -45,8 +68,8 @@ class PoliticalProposal(Base):
     fact_check_fonte = Column(String(500), nullable=True)
     truth_score = Column(Float, default=75.0) # Voto di veridicità a salti del 5% (0.0 to 100.0)
     
-    # Metadata & Tracking
-    fonte_url = Column(String(1000), nullable=False)
+    # Metadata & Tracking (FIX DB-01: nullable=True with empty string fallback)
+    fonte_url = Column(String(1000), nullable=True, default="")
     fonte_titolo = Column(String(500), nullable=True)
     fonte_testata = Column(String(200), nullable=True) # e.g. "ANSA", "Il Sole 24 Ore", "Gazzetta Ufficiale", "Atti Parlamentari"
     raw_text = Column(Text, nullable=True)
@@ -55,10 +78,15 @@ class PoliticalProposal(Base):
     # Semantic Search Embedding (Vector serialized as JSON string or pgvector)
     embedding = Column(Text, nullable=True)
     
-    timestamp = Column(DateTime, default=datetime.datetime.utcnow, index=True)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    timestamp = Column(DateTime, default=utcnow, index=True)
+    created_at = Column(DateTime, default=utcnow)
 
     party_rel = relationship("PoliticalParty", back_populates="proposals")
+
+    __table_args__ = (
+        # FIX DB-04: composite index for fast party+topic querying and RAG retrieval
+        Index("ix_proposals_partito_macro_argomento", "partito", "macro_argomento"),
+    )
 
 class IngestionLog(Base):
     __tablename__ = "ingestion_logs"
@@ -70,7 +98,7 @@ class IngestionLog(Base):
     proposals_extracted = Column(Integer, default=0)
     status = Column(String(50), default="SUCCESS") # "SUCCESS", "PARTIAL", "FAILED"
     log_message = Column(Text, nullable=True)
-    timestamp = Column(DateTime, default=datetime.datetime.utcnow)
+    timestamp = Column(DateTime, default=utcnow)
 
 class InstitutionalBenchmark(Base):
     __tablename__ = "institutional_benchmarks"
@@ -97,7 +125,7 @@ class AuditLog(Base):
     new_value = Column(Text, nullable=True)
     agent_responsible = Column(String(100), nullable=False, default="System") # "PollTrackerAgent", "PolicyDistillerAgent", "FiscalAuditorAgent", "ReconciliationAgent", "System"
     details = Column(Text, nullable=True)
-    timestamp = Column(DateTime, default=datetime.datetime.utcnow, index=True)
+    timestamp = Column(DateTime, default=utcnow, index=True)
 
 class VisitorLog(Base):
     __tablename__ = "visitor_logs"
@@ -111,6 +139,6 @@ class VisitorLog(Base):
     browser = Column(String(100), default="Altro")       # "Google Chrome", "Mozilla Firefox", "Apple Safari", "Microsoft Edge", "Altro"
     os_name = Column(String(100), default="Sconosciuto") # "Windows", "macOS", "iOS", "Android", "Linux", "Sconosciuto"
     country = Column(String(100), nullable=True)
-    timestamp = Column(DateTime, default=datetime.datetime.utcnow, index=True)
+    timestamp = Column(DateTime, default=utcnow, index=True)
 
 

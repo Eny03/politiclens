@@ -2,13 +2,34 @@ import os
 from typing import Optional
 from pydantic import BaseModel
 
+# Automatically load .env if present in backend or root directory
+for env_candidate in [
+    os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".env")),
+    os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".env"))
+]:
+    if os.path.isfile(env_candidate):
+        try:
+            with open(env_candidate, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith("#") and "=" in line:
+                        k, v = line.split("=", 1)
+                        k, v = k.strip(), v.strip().strip("'\"")
+                        if k and k not in os.environ:
+                            os.environ[k] = v
+        except Exception:
+            pass
+
+DEFAULT_DB_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "politiclens.db"))
+DEFAULT_DB_URL = f"sqlite:///{DEFAULT_DB_FILE.replace(os.sep, '/')}"
+
 class Settings(BaseModel):
     APP_NAME: str = "PoliticLens"
     APP_VERSION: str = "1.0.0"
     ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
     
-    # Database
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./politiclens.db")
+    # Database - unified absolute path ensures no divergence between root and backend
+    DATABASE_URL: str = os.getenv("DATABASE_URL", DEFAULT_DB_URL)
     
     # Local LLM / Ollama settings (100% open-source)
     OLLAMA_BASE_URL: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")

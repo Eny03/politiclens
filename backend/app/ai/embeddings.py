@@ -40,8 +40,9 @@ def _standardize_dimension(v: List[float], target_dim: int = DIMENSION) -> np.nd
 def _local_deterministic_embedding(text: str, dim: int = DIMENSION) -> List[float]:
     """
     High-fidelity deterministic local text embedding generator.
-    Creates a dense normalized vector based on character n-grams and word hashing.
-    Used as an immediate, fast, offline fallback when Ollama is offline.
+    Creates a dense normalized vector based on single words, word bigrams, and character n-grams.
+    FIX AI-09: includes consecutive word bigrams (e.g. 'salario minimo', 'quota 41', 'cuneo fiscale')
+    for rich semantic phrase preservation.
     """
     clean_words = re.findall(r"\w+", text.lower())
     vec = np.zeros(dim, dtype=np.float32)
@@ -49,15 +50,22 @@ def _local_deterministic_embedding(text: str, dim: int = DIMENSION) -> List[floa
     if not clean_words:
         return vec.tolist()
         
-    for word in clean_words:
-        # Stable Word hash
+    for i, word in enumerate(clean_words):
+        # 1. Stable Word hash
         h = _stable_hash(word) % dim
         vec[h] += 1.0
-        # Character bigram hashes
-        for i in range(len(word) - 1):
-            bg = word[i:i+2]
+
+        # 2. Word Bigram hash (pairs of consecutive words: key for compound policy phrases)
+        if i < len(clean_words) - 1:
+            w_bg = f"{word}_{clean_words[i+1]}"
+            h_wbg = _stable_hash(w_bg) % dim
+            vec[h_wbg] += 0.85
+
+        # 3. Character bigram hashes (sub-word morphologic features)
+        for j in range(len(word) - 1):
+            bg = word[j:j+2]
             h_bg = (_stable_hash(bg) * 31) % dim
-            vec[h_bg] += 0.5
+            vec[h_bg] += 0.4
             
     vec = _normalize_vector(vec)
     return vec.tolist()
@@ -79,12 +87,17 @@ async def get_text_embedding(text: str) -> List[float]:
 def cosine_similarity(v1: List[float], v2: List[float]) -> float:
     """
     Computes cosine similarity between two vector lists.
-    Gracefully standardizes dimensionalities if they differ.
+    FIX PERF-04: fast-path vector normalization without redundant interpolation
+    when vectors are already of target DIMENSION.
     """
     if not v1 or not v2:
         return 0.0
-    a = _standardize_dimension(v1, DIMENSION)
-    b = _standardize_dimension(v2, DIMENSION)
+    if len(v1) == DIMENSION and len(v2) == DIMENSION:
+        a = np.array(v1, dtype=np.float32)
+        b = np.array(v2, dtype=np.float32)
+    else:
+        a = _standardize_dimension(v1, DIMENSION)
+        b = _standardize_dimension(v2, DIMENSION)
     norm_a = np.linalg.norm(a)
     norm_b = np.linalg.norm(b)
     if norm_a == 0 or norm_b == 0:

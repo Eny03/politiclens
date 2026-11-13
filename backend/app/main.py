@@ -85,21 +85,25 @@ def seed_database_if_empty():
                 elif not bench and code == "NM":
                     bench = SURVEY_INSTITUTES_OBSERVATIONS.get("NOI_MOD")
 
-                if bench:
-                    s_vals = list(bench["surveys"].values())
-                    curr.poll_percentage = round(sum(s_vals) / len(s_vals), 1)
-                    curr.poll_sources = f"Media calcolata dall'AI su {len(s_vals)} istituti ({', '.join(list(bench['surveys'].keys())[:4])})"
-                    prev_w = bench.get("previous_wave", curr.poll_percentage)
-                    curr.previous_poll_percentage = prev_w
-                    d = round(curr.poll_percentage - prev_w, 1)
-                    curr.poll_trend = f"+{d:.1f}%" if d > 0 else (f"{d:.1f}%" if d < 0 else "stabile")
-                elif p_data.get("poll_percentage") is not None:
-                    curr.poll_percentage = p_data["poll_percentage"]
-                if p_data.get("truthfulness_score") is not None:
+                # Only seed or update poll data if the party doesn't have a valid active percentage yet
+                if not curr.poll_percentage or curr.poll_percentage == 0:
+                    if bench:
+                        s_vals = list(bench["surveys"].values())
+                        curr.poll_percentage = round(sum(s_vals) / len(s_vals), 1)
+                        curr.poll_sources = f"Media calcolata dall'AI su {len(s_vals)} istituti ({', '.join(list(bench['surveys'].keys())[:4])})"
+                        prev_w = bench.get("previous_wave", curr.poll_percentage)
+                        curr.previous_poll_percentage = prev_w
+                        d = round(curr.poll_percentage - prev_w, 1)
+                        curr.poll_trend = f"+{d:.1f}%" if d > 0 else (f"{d:.1f}%" if d < 0 else "stabile")
+                    elif p_data.get("poll_percentage") is not None:
+                        curr.poll_percentage = p_data["poll_percentage"]
+                
+                # Only set initial scores if party doesn't have them yet (prevents resetting dynamically computed scores)
+                if (not curr.truthfulness_score or curr.truthfulness_score == 0) and p_data.get("truthfulness_score") is not None:
                     curr.truthfulness_score = p_data["truthfulness_score"]
-                if p_data.get("financial_reliability_score") is not None:
+                if (not curr.financial_reliability_score or curr.financial_reliability_score == 0) and p_data.get("financial_reliability_score") is not None:
                     curr.financial_reliability_score = p_data["financial_reliability_score"]
-                if p_data.get("dossier_ai"):
+                if not curr.dossier_ai and p_data.get("dossier_ai"):
                     curr.dossier_ai = p_data["dossier_ai"]
         db.commit()
 

@@ -71,6 +71,9 @@ def get_overview_stats(db: Session = Depends(get_db)):
         if p_total > 0:
             p_truth = round(sum(calculate_proposal_truthfulness_score(pr.fact_check_status, getattr(pr, "truth_score", None)) for pr in p_props) / p_total, 1)
             p_fin = round(sum(calculate_financial_coverage_percentage(pr.costo_stimato, pr.coperture_dichiarate, pr.dichiarazione_sintesi) for pr in p_props) / p_total, 1)
+            # Dynamically sync party record with current proposal scores
+            p.truthfulness_score = p_truth
+            p.financial_reliability_score = p_fin
         else:
             p_truth = p.truthfulness_score or 75.0
             p_fin = p.financial_reliability_score or 70.0
@@ -105,6 +108,12 @@ def get_overview_stats(db: Session = Depends(get_db)):
             "proposals_count": p_total
         })
 
+    # Persist updated party scores if any changed
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+
     # Sort party rankings by poll percentage descending
     party_rankings.sort(key=lambda x: x["poll_percentage"], reverse=True)
 
@@ -137,20 +146,24 @@ def get_overview_stats(db: Session = Depends(get_db)):
     benchmarks = db.query(InstitutionalBenchmark).all()
     benchmarks_summary = [InstitutionalBenchmarkSchema.model_validate(b) for b in benchmarks]
 
-    # Dynamic weekly trend for global indicators
+    # Dynamic trend for global truthfulness and feasibility indicators
     import datetime
-    seven_days_ago = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None) - datetime.timedelta(days=7)
-    older_proposals = [p for p in all_proposals if p.timestamp and p.timestamp < seven_days_ago]
-    if older_proposals and len(older_proposals) >= 10:
+    now_utc = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+    recent_proposals = [p for p in all_proposals if p.timestamp and p.timestamp >= now_utc - datetime.timedelta(days=14)]
+    older_proposals = [p for p in all_proposals if p.timestamp and p.timestamp < now_utc - datetime.timedelta(days=14)]
+    
+    if recent_proposals and older_proposals and len(recent_proposals) >= 3 and len(older_proposals) >= 3:
+        recent_truth_avg = round(sum(calculate_proposal_truthfulness_score(p.fact_check_status, getattr(p, "truth_score", None)) for p in recent_proposals) / len(recent_proposals), 1)
+        recent_cov_avg = round(sum(calculate_financial_coverage_percentage(p.costo_stimato, p.coperture_dichiarate, p.dichiarazione_sintesi) for p in recent_proposals) / len(recent_proposals), 1)
         old_truth_avg = round(sum(calculate_proposal_truthfulness_score(p.fact_check_status, getattr(p, "truth_score", None)) for p in older_proposals) / len(older_proposals), 1)
         old_cov_avg = round(sum(calculate_financial_coverage_percentage(p.costo_stimato, p.coperture_dichiarate, p.dichiarazione_sintesi) for p in older_proposals) / len(older_proposals), 1)
-        diff_truth = round(avg_truthfulness - old_truth_avg, 1)
-        diff_cov = round(quantified_percentage - old_cov_avg, 1)
+        diff_truth = round(recent_truth_avg - old_truth_avg, 1)
+        diff_cov = round(recent_cov_avg - old_cov_avg, 1)
         t_trend = f"+{diff_truth:.1f}%" if diff_truth > 0 else (f"{diff_truth:.1f}%" if diff_truth < 0 else "stabile")
         f_trend = f"+{diff_cov:.1f}%" if diff_cov > 0 else (f"{diff_cov:.1f}%" if diff_cov < 0 else "stabile")
     else:
-        t_trend = "+0.2%"
-        f_trend = "+0.1%"
+        t_trend = "stabile"
+        f_trend = "stabile"
 
     return StatsOverviewResponse(
         total_proposals=total_proposals,

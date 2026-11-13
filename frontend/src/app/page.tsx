@@ -472,17 +472,19 @@ function DashboardContent() {
     return calculateCoalitionMetrics(selectedPartiesForCoalition, allRankings);
   }, [selectedPartiesForCoalition, allRankings, calculateCoalitionMetrics]);
 
-  // Active Dashboard KPIs (Sums & Medie reactive to the selected coalition)
+  // Active Dashboard KPIs (Sums & Medie reactive to the selected coalition and demoscopic weighting)
   const currentDashboardMetrics = useMemo(() => {
     if (activeCoalitionFilter === "all") {
+      const allCodes = allRankings.map((p: any) => p.code);
+      const m = calculateCoalitionMetrics(allCodes, allRankings);
       return {
         title: "Tutta Italia (Tutte le Forze Politiche)",
         isFiltered: false,
         totalProposals: stats?.total_proposals || proposals.length,
         totalParties: stats?.total_parties || parties.length || 22,
         totalPoll: 100.0,
-        avgTruth: stats?.average_truthfulness !== undefined ? stats.average_truthfulness : 75.3,
-        avgFinance: stats?.quantified_cost_percentage !== undefined ? stats.quantified_cost_percentage : 65.8,
+        avgTruth: m.count > 0 ? m.avgTruth : (stats?.average_truthfulness !== undefined ? stats.average_truthfulness : 75.3),
+        avgFinance: m.count > 0 ? m.avgFinance : (stats?.quantified_cost_percentage !== undefined ? stats.quantified_cost_percentage : 65.8),
         parties: allRankings,
         partyCodes: [] as string[]
       };

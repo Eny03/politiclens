@@ -201,8 +201,8 @@ class StatsOverviewResponse(BaseModel):
     quantified_cost_percentage: float
     average_truthfulness: float = 0.0
     average_financial_feasibility: float = 0.0
-    truthfulness_trend: Optional[str] = "+0.2%"
-    feasibility_trend: Optional[str] = "+0.1%"
+    truthfulness_trend: Optional[str] = "stabile"
+    feasibility_trend: Optional[str] = "stabile"
     coalition_truthfulness: Dict[str, float] = {}
     party_rankings: List[Dict[str, Any]] = []
     truth_thresholds: List[Dict[str, Any]] = []

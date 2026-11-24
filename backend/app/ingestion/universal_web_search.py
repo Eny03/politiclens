@@ -1,7 +1,6 @@
 import urllib.parse
 import urllib.request
 import datetime
-import socket
 import json
 import re
 from typing import List, Dict, Any
@@ -9,10 +8,24 @@ import feedparser
 from bs4 import BeautifulSoup
 from app.ingestion.text_extractor import detect_entities, clean_html
 
-# Fast network socket timeout
-socket.setdefaulttimeout(4)
-
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 PoliticLens/2.0"
+
+
+def _unwrap_duckduckgo_url(link: str) -> str:
+    """Decodes protocol-relative DuckDuckGo redirect URLs (//duckduckgo.com/l/?uddg=...) into clean target URLs."""
+    if not link:
+        return ""
+    if "duckduckgo.com/l/" in link and "uddg=" in link:
+        try:
+            parsed = urllib.parse.urlparse(link if link.startswith("http") else "https:" + link)
+            qs = urllib.parse.parse_qs(parsed.query)
+            if "uddg" in qs and qs["uddg"]:
+                return qs["uddg"][0]
+        except Exception:
+            pass
+    if link.startswith("//"):
+        return "https:" + link
+    return link
 
 def search_web_news(query: str, max_results: int = 15) -> List[Dict[str, Any]]:
     """
@@ -78,7 +91,7 @@ def search_duckduckgo_open_web(query: str, max_results: int = 10) -> List[Dict[s
                 
                 if title_elem:
                     title = title_elem.get_text(strip=True)
-                    link = title_elem.get("href", "")
+                    link = _unwrap_duckduckgo_url(title_elem.get("href", ""))
                     snippet = snippet_elem.get_text(strip=True) if snippet_elem else ""
                     
                     combined_text = f"{title}. {snippet}"

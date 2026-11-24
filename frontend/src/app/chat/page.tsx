@@ -24,7 +24,7 @@ import {
   Search,
   CheckCircle2
 } from "lucide-react";
-import { CitationItem } from "@/lib/api";
+import { API_BASE_URL, CitationItem } from "@/lib/api";
 import { MarkdownMessage } from "@/components/MarkdownMessage";
 
 interface ChatStep {
@@ -55,9 +55,24 @@ const STARTER_PROMPTS = [
     mode: "comparativo",
   },
   {
-    title: "Cuneo & Flat Tax (2022-2026)",
+    title: "FdI vs PD: Fisco & Flat Tax",
     query: "Quali sono le differenze tra Fratelli d'Italia e il PD su cuneo fiscale e Flat Tax?",
     mode: "confronto_diretto",
+  },
+  {
+    title: "Classifica Veridicità & Coperture",
+    query: "Quali partiti hanno il punteggio più alto di veridicità e coperture finanziarie MEF?",
+    mode: "fact_check",
+  },
+  {
+    title: "Ultimi Sondaggi Elettorali",
+    query: "Quali sono gli ultimi sondaggi elettorali aggiornati in Italia?",
+    mode: "comparativo",
+  },
+  {
+    title: "Proposte Inattuabili / Esagerate",
+    query: "Quali proposte politiche risultano inattuabili o esagerate secondo il fact-checking MEF?",
+    mode: "fact_check",
   },
   {
     title: "Futuro Nazionale vs ORA!",
@@ -65,13 +80,8 @@ const STARTER_PROMPTS = [
     mode: "confronto_diretto",
   },
   {
-    title: "Sanità & Liste d'Attesa",
-    query: "Quali sono le proposte dei partiti sul Fondo Sanitario Nazionale e il taglio delle liste d'attesa?",
-    mode: "comparativo",
-  },
-  {
-    title: "Verifica Coperture MEF",
-    query: "L'aumento delle pensioni minime ha coperture finanziarie certificate dalla Ragioneria Generale dello Stato?",
+    title: "Verifica Pensioni Minime",
+    query: "L'aumento delle pensioni minime a 1.000 euro ha coperture finanziarie certificate dalla Ragioneria Generale dello Stato?",
     mode: "fact_check",
   },
 ];
@@ -176,7 +186,7 @@ export default function ChatPage() {
     }
 
     // Check active AI provider
-    fetch("/api/chat/provider")
+    fetch(`${API_BASE_URL}/api/chat/provider`)
       .then(res => res.json())
       .then(data => {
         if (data && data.label) {
@@ -206,6 +216,9 @@ export default function ChatPage() {
     if (!queryText || loading) return;
 
     const currentMode = selectedMode || mode;
+    if (selectedMode && selectedMode !== mode) {
+      setMode(selectedMode);
+    }
     const userMsgId = `user-${Date.now()}`;
     const userMsg: Message = {
       id: userMsgId,
@@ -226,14 +239,17 @@ export default function ChatPage() {
     let capturedCitations: CitationItem[] = [];
     const collectedSteps: ChatStep[] = [];
 
-    // History payload for conversational memory
-    const historyPayload = messages.slice(-6).map((m) => ({
-      role: m.role,
-      content: m.content,
-    }));
+    // History payload for conversational memory (exclude synthetic welcome greetings)
+    const historyPayload = messages
+      .filter((m) => !m.id.startsWith("welcome-"))
+      .slice(-6)
+      .map((m) => ({
+        role: m.role,
+        content: m.content,
+      }));
 
     try {
-      const response = await fetch("/api/chat/stream", {
+      const response = await fetch(`${API_BASE_URL}/api/chat/stream`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -424,21 +440,47 @@ export default function ChatPage() {
         </button>
       </div>
 
-      {/* Suggested Queries Chips */}
-      <div className="flex items-center gap-2 py-2.5 overflow-x-auto shrink-0 scrollbar-none border-b border-slate-100 dark:border-slate-800/60">
-        <span className="text-[10px] font-bold text-slate-400 shrink-0 uppercase tracking-wider">
-          Temi Chiave:
-        </span>
-        {STARTER_PROMPTS.map((p, idx) => (
-          <button
-            key={idx}
-            onClick={() => handleSend(p.query, p.mode)}
-            disabled={loading}
-            className="shrink-0 text-xs px-3 py-1.5 rounded-full bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all disabled:opacity-50 shadow-2xs font-medium"
-          >
-            {p.title}
-          </button>
-        ))}
+      {/* Analysis Mode Selector & Suggested Queries Chips */}
+      <div className="flex flex-col gap-2 py-2.5 shrink-0 border-b border-slate-100 dark:border-slate-800/60">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-[10px] font-bold text-slate-400 shrink-0 uppercase tracking-wider mr-1">
+            Modalità AI:
+          </span>
+          {[
+            { id: "comparativo", label: "Comparativo Multi-Partito" },
+            { id: "confronto_diretto", label: "Testa a Testa" },
+            { id: "fact_check", label: "Fact-Check & Coperture MEF" },
+          ].map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              onClick={() => setMode(m.id)}
+              disabled={loading}
+              className={`text-[11px] px-2.5 py-1 rounded-lg font-semibold transition-all border ${
+                mode === m.id
+                  ? "bg-blue-600 text-white border-blue-600 shadow-2xs"
+                  : "bg-slate-50 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700"
+              }`}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-1.5 overflow-x-auto sm:overflow-visible sm:flex-wrap scrollbar-none">
+          <span className="text-[10px] font-bold text-slate-400 shrink-0 uppercase tracking-wider">
+            Temi Chiave:
+          </span>
+          {STARTER_PROMPTS.map((p, idx) => (
+            <button
+              key={idx}
+              onClick={() => handleSend(p.query, p.mode)}
+              disabled={loading}
+              className="shrink-0 text-[11px] px-2.5 py-1 rounded-full bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-blue-50 dark:hover:bg-slate-700 hover:border-blue-300 dark:hover:border-blue-600 transition-all disabled:opacity-50 shadow-2xs font-medium"
+            >
+              {p.title}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Messages Scroll Area */}
@@ -521,7 +563,17 @@ export default function ChatPage() {
                               </p>
                             </div>
                             <div className="mt-2 flex items-center justify-between text-[10px] text-slate-400">
-                              <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                              <span
+                                className={`font-semibold ${
+                                  (c.fact_check_status || "").toLowerCase().includes("inattuabile") || (c.fact_check_status || "").toLowerCase().includes("fake")
+                                    ? "text-rose-600 dark:text-rose-400"
+                                    : (c.fact_check_status || "").toLowerCase().includes("esagerat")
+                                    ? "text-orange-600 dark:text-orange-400"
+                                    : (c.fact_check_status || "").toLowerCase().includes("verificato")
+                                    ? "text-emerald-600 dark:text-emerald-400"
+                                    : "text-blue-600 dark:text-blue-400"
+                                }`}
+                              >
                                 {c.fact_check_status}
                               </span>
                               <span className="inline-flex items-center gap-0.5 group-hover:text-blue-500">

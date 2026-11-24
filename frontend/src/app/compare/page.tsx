@@ -24,6 +24,7 @@ import {
   AlertCircle
 } from "lucide-react";
 import { 
+  API_BASE_URL,
   fetchComparisonMatrix, 
   fetchParties, 
   ComparisonMatrixResponse, 
@@ -32,6 +33,21 @@ import {
 } from "@/lib/api";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TopicBadge } from "@/components/TopicBadge";
+import { ProposalDetailModal } from "@/components/ProposalDetailModal";
+
+interface PartyHeadMetrics {
+  name: string;
+  code: string;
+  color: string;
+  coalition: string;
+  leader?: string;
+  poll_percentage: number;
+  truthfulness_score: number;
+  financial_reliability_score: number;
+  proposals_count: number;
+  verified_count: number;
+  critical_count: number;
+}
 
 interface HeadToHeadSynthesis {
   party1: string;
@@ -53,6 +69,9 @@ interface HeadToHeadSynthesis {
   proposals_party1: string[];
   proposals_party2: string[];
   institutional_verdict: string;
+  party1_metrics?: PartyHeadMetrics;
+  party2_metrics?: PartyHeadMetrics;
+  alignment_index?: number;
 }
 
 export default function ComparePage() {
@@ -72,6 +91,12 @@ export default function ComparePage() {
   const [partyB, setPartyB] = useState<string>("Partito Democratico");
   const [synthesis, setSynthesis] = useState<HeadToHeadSynthesis | null>(null);
   const [loadingSynthesis, setLoadingSynthesis] = useState<boolean>(false);
+  const [modalProposal, setModalProposal] = useState<PoliticalProposal | null>(null);
+
+  const handleSwapParties = () => {
+    setPartyA(partyB);
+    setPartyB(partyA);
+  };
 
   useEffect(() => {
     async function loadData() {
@@ -101,7 +126,7 @@ export default function ComparePage() {
       try {
         setLoadingSynthesis(true);
         const queryTopic = selectedTopic !== "Tutti" ? selectedTopic : undefined;
-        const res = await fetch("/api/comparison/head-to-head-synthesis", {
+        const res = await fetch(`${API_BASE_URL}/api/comparison/head-to-head-synthesis`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -141,10 +166,19 @@ export default function ComparePage() {
   ];
   const macroTopics = matrixData?.macro_argomenti?.length ? ["Tutti", ...matrixData.macro_argomenti] : defaultMacroTopics;
 
-  // Filter parties by coalition
+  // Filter parties by coalition (accurate non-overlapping mapping for all 22 parties)
   const filteredParties = parties.filter((p) => {
     if (selectedCoalition === "Tutte") return true;
-    return p.coalition.toLowerCase().includes(selectedCoalition.toLowerCase());
+    const c = (p.coalition || "").toLowerCase();
+    if (selectedCoalition === "Centrodestra") return c.includes("centrodestra") || c.includes("destra");
+    if (selectedCoalition === "Centrosinistra") return c.includes("centrosinistra");
+    if (selectedCoalition === "Movimento 5 Stelle") return p.code === "M5S" || c.includes("opposizione");
+    if (selectedCoalition === "Centro / Liberaldemocratici") {
+      return (c.startsWith("centro") && !c.includes("centrodestra") && !c.includes("centrosinistra")) || c.includes("radicale / diritti");
+    }
+    if (selectedCoalition === "Sinistra & Pacifisti") return c.includes("sinistra") && !c.includes("centrosinistra");
+    if (selectedCoalition === "Sovranismo & Autonomie") return c.includes("sovranismo popolare") || c.includes("autonomie");
+    return c.includes(selectedCoalition.toLowerCase());
   });
 
   // Filter matrix rows by topic & search
@@ -233,7 +267,7 @@ export default function ComparePage() {
                   : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
               }`}
             >
-              <span>Matrice 18 Partiti</span>
+              <span>Matrice {parties.length || 22} Partiti</span>
             </button>
           </div>
 
@@ -309,9 +343,9 @@ export default function ComparePage() {
       ) : viewMode === "head-to-head" ? (
         /* Head-to-Head Comparison View */
         <div className="space-y-5 w-full max-w-full min-w-0">
-          {/* Party Pickers Bar */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs w-full min-w-0">
-            <div className="min-w-0">
+          {/* Party Pickers Bar with Swap Control */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-3 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs w-full min-w-0">
+            <div className="flex-1 min-w-0">
               <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 flex items-center gap-1.5">
                 <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: parties.find(p => p.name === partyA)?.color || "#3b82f6" }} />
                 <span>Primo Partito:</span>
@@ -328,7 +362,18 @@ export default function ComparePage() {
                 ))}
               </select>
             </div>
-            <div className="min-w-0">
+
+            <button
+              type="button"
+              onClick={handleSwapParties}
+              className="self-center sm:self-end p-2.5 rounded-xl bg-slate-100 hover:bg-blue-50 dark:bg-slate-800 dark:hover:bg-blue-950/60 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:text-blue-600 dark:hover:text-blue-400 transition-colors shrink-0 flex items-center justify-center gap-1.5 text-xs font-bold"
+              title="Scambia i due partiti"
+            >
+              <ArrowLeftRight className="w-4 h-4" />
+              <span className="sm:hidden">Scambia</span>
+            </button>
+
+            <div className="flex-1 min-w-0">
               <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 flex items-center gap-1.5">
                 <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: parties.find(p => p.name === partyB)?.color || "#ef4444" }} />
                 <span>Secondo Partito:</span>
@@ -374,6 +419,91 @@ export default function ComparePage() {
 
             {synthesis && (
               <div className="space-y-4 text-xs sm:text-sm">
+                {/* Side-by-Side Metrics Scorecard + Programmatic Alignment Meter */}
+                {synthesis.party1_metrics && synthesis.party2_metrics && (
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 p-3.5 rounded-2xl bg-slate-50/90 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-700/70">
+                    {/* Party 1 Metrics */}
+                    <div className="lg:col-span-5 flex flex-col justify-between gap-2 p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: synthesis.party1_metrics.color }} />
+                          <span className="font-extrabold text-slate-900 dark:text-white truncate">{synthesis.party1_metrics.name}</span>
+                        </div>
+                        <span className="text-[11px] font-mono font-bold px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300">
+                          {synthesis.party1_metrics.poll_percentage}% sondaggi
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 pt-1 text-center">
+                        <div className="p-1.5 rounded-lg bg-slate-50 dark:bg-slate-800/70">
+                          <div className="text-[10px] text-slate-400 font-semibold">Veridicità</div>
+                          <div className="font-mono font-black text-emerald-600 dark:text-emerald-400">{synthesis.party1_metrics.truthfulness_score}%</div>
+                        </div>
+                        <div className="p-1.5 rounded-lg bg-slate-50 dark:bg-slate-800/70">
+                          <div className="text-[10px] text-slate-400 font-semibold">Coperture</div>
+                          <div className="font-mono font-black text-amber-600 dark:text-amber-400">{synthesis.party1_metrics.financial_reliability_score}%</div>
+                        </div>
+                        <div className="p-1.5 rounded-lg bg-slate-50 dark:bg-slate-800/70">
+                          <div className="text-[10px] text-slate-400 font-semibold">Atti</div>
+                          <div className="font-mono font-black text-slate-800 dark:text-slate-100">{synthesis.party1_metrics.proposals_count}</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Center Programmatic Alignment Meter */}
+                    <div className="lg:col-span-2 flex flex-col items-center justify-center p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800 text-center">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Affinità Programmatica</span>
+                      <span className={`text-2xl font-black font-mono mt-0.5 ${
+                        (synthesis.alignment_index ?? 50) >= 65
+                          ? "text-emerald-600 dark:text-emerald-400"
+                          : (synthesis.alignment_index ?? 50) >= 40
+                          ? "text-amber-600 dark:text-amber-400"
+                          : "text-rose-600 dark:text-rose-400"
+                      }`}>
+                        {synthesis.alignment_index ?? 50}%
+                      </span>
+                      <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden mt-1.5">
+                        <div
+                          className={`h-full rounded-full transition-all ${
+                            (synthesis.alignment_index ?? 50) >= 65
+                              ? "bg-emerald-500"
+                              : (synthesis.alignment_index ?? 50) >= 40
+                              ? "bg-amber-500"
+                              : "bg-rose-500"
+                          }`}
+                          style={{ width: `${synthesis.alignment_index ?? 50}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Party 2 Metrics */}
+                    <div className="lg:col-span-5 flex flex-col justify-between gap-2 p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: synthesis.party2_metrics.color }} />
+                          <span className="font-extrabold text-slate-900 dark:text-white truncate">{synthesis.party2_metrics.name}</span>
+                        </div>
+                        <span className="text-[11px] font-mono font-bold px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300">
+                          {synthesis.party2_metrics.poll_percentage}% sondaggi
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 pt-1 text-center">
+                        <div className="p-1.5 rounded-lg bg-slate-50 dark:bg-slate-800/70">
+                          <div className="text-[10px] text-slate-400 font-semibold">Veridicità</div>
+                          <div className="font-mono font-black text-emerald-600 dark:text-emerald-400">{synthesis.party2_metrics.truthfulness_score}%</div>
+                        </div>
+                        <div className="p-1.5 rounded-lg bg-slate-50 dark:bg-slate-800/70">
+                          <div className="text-[10px] text-slate-400 font-semibold">Coperture</div>
+                          <div className="font-mono font-black text-amber-600 dark:text-amber-400">{synthesis.party2_metrics.financial_reliability_score}%</div>
+                        </div>
+                        <div className="p-1.5 rounded-lg bg-slate-50 dark:bg-slate-800/70">
+                          <div className="text-[10px] text-slate-400 font-semibold">Atti</div>
+                          <div className="font-mono font-black text-slate-800 dark:text-slate-100">{synthesis.party2_metrics.proposals_count}</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <p className="text-slate-700 dark:text-slate-300 leading-relaxed break-words">
                   {synthesis.executive_summary}
                 </p>
@@ -485,7 +615,8 @@ export default function ComparePage() {
                             {propsA.map((prop, pIdx) => (
                               <div
                                 key={prop.id || pIdx}
-                                className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 space-y-2"
+                                onClick={() => setModalProposal(prop)}
+                                className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 hover:border-blue-300 dark:hover:border-blue-700 hover:shadow-xs transition-all cursor-pointer space-y-2"
                               >
                                 <div className="flex items-center justify-between gap-1">
                                   <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
@@ -504,6 +635,7 @@ export default function ComparePage() {
                                         href={prop.fonte_url}
                                         target="_blank"
                                         rel="noopener noreferrer"
+                                        onClick={(e) => e.stopPropagation()}
                                         className="text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-0.5"
                                       >
                                         <span>Fonte</span>
@@ -549,7 +681,8 @@ export default function ComparePage() {
                             {propsB.map((prop, pIdx) => (
                               <div
                                 key={prop.id || pIdx}
-                                className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 space-y-2"
+                                onClick={() => setModalProposal(prop)}
+                                className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 hover:border-blue-300 dark:hover:border-blue-700 hover:shadow-xs transition-all cursor-pointer space-y-2"
                               >
                                 <div className="flex items-center justify-between gap-1">
                                   <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
@@ -568,6 +701,7 @@ export default function ComparePage() {
                                         href={prop.fonte_url}
                                         target="_blank"
                                         rel="noopener noreferrer"
+                                        onClick={(e) => e.stopPropagation()}
                                         className="text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-0.5"
                                       >
                                         <span>Fonte</span>
@@ -597,7 +731,7 @@ export default function ComparePage() {
         /* Full Party Matrix View */
         <div className="space-y-4 w-full max-w-full min-w-0">
           <div className="w-full max-w-full min-w-0 flex items-center gap-1.5 overflow-x-auto pb-1.5 scrollbar-none">
-            {["Tutte", "Centrodestra", "Centrosinistra", "Movimento 5 Stelle", "Centro / Liberaldemocratici", "Sinistra Radicale"].map((c) => (
+            {["Tutte", "Centrodestra", "Centrosinistra", "Movimento 5 Stelle", "Centro / Liberaldemocratici", "Sinistra & Pacifisti", "Sovranismo & Autonomie"].map((c) => (
               <button
                 key={c}
                 onClick={() => setSelectedCoalition(c)}
@@ -674,6 +808,13 @@ export default function ComparePage() {
           </div>
         </div>
       )}
+
+      {/* Full Proposal Detail & Institutional Fact-Check Modal */}
+      <ProposalDetailModal
+        proposal={modalProposal}
+        isOpen={Boolean(modalProposal)}
+        onClose={() => setModalProposal(null)}
+      />
     </div>
   );
 }

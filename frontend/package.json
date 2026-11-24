@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "postbuild": "node -e \"const fs = require('fs'); fs.cpSync('out', '../backend/static', {recursive: true});\"",
+    "postbuild": "node -e \"const fs = require('fs'); fs.rmSync('../backend/static', {recursive: true, force: true}); fs.cpSync('out', '../backend/static', {recursive: true});\"",
     "start": "next start",
 
     "lint": "next lint"

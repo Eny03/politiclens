@@ -20,7 +20,7 @@ class ProposalExtractionSchema(BaseModel):
     tipo_azione: str = Field(description="Proposta di legge | Dichiarazione programmatica | Opposizione | Emendamento")
     impatto_economico: ImpattoEconomicoSchema
     fact_check: FactCheckSchema
-    fonte_url: str = Field(description="URL dell'articolo/documento")
+    fonte_url: Optional[str] = ""
     timestamp: str = Field(description="ISO 8601 timestamp")
 
 # Response Schemas
@@ -53,14 +53,14 @@ class PoliticalProposalDetail(BaseModel):
     macro_argomento: str
     dichiarazione_sintesi: str
     tipo_azione: str
-    costo_stimato: str
-    coperture_dichiarate: str
+    costo_stimato: Optional[str] = "Non quantificato"
+    coperture_dichiarate: Optional[str] = "Non specificate"
     fattibilita_finanziaria: Optional[str] = None
     fact_check_status: str
     fact_check_motivazione: Optional[str] = None
     fact_check_fonte: Optional[str] = None
     truth_score: Optional[float] = 75.0
-    fonte_url: str
+    fonte_url: Optional[str] = ""
     fonte_titolo: Optional[str] = None
     fonte_testata: Optional[str] = None
     raw_text: Optional[str] = None
@@ -105,6 +105,9 @@ class HeadToHeadSynthesisResponse(BaseModel):
     proposals_party1: List[str]
     proposals_party2: List[str]
     institutional_verdict: str
+    party1_metrics: Optional[Dict[str, Any]] = None
+    party2_metrics: Optional[Dict[str, Any]] = None
+    alignment_index: Optional[int] = None
 
 # Chatbot RAG Schemas
 class ChatMessage(BaseModel):
@@ -124,7 +127,7 @@ class CitationItem(BaseModel):
     sintesi: str
     fonte_titolo: Optional[str] = None
     fonte_testata: Optional[str] = None
-    fonte_url: str
+    fonte_url: Optional[str] = ""
     timestamp: str
     fact_check_status: str
 

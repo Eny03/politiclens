@@ -36,19 +36,25 @@ function renderInline(text: string): React.ReactNode[] {
 
     const fullMatch = match[0];
     if (fullMatch.startsWith("[") && match[2] && match[3]) {
-      // Link
-      parts.push(
-        <a
-          key={`link-${match.index}`}
-          href={match[3]}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-blue-600 dark:text-blue-400 font-semibold underline underline-offset-2 hover:text-blue-800 dark:hover:text-blue-300 inline-flex items-center gap-0.5 mx-0.5"
-        >
-          <span>{match[2]}</span>
-          <ExternalLink className="w-2.5 h-2.5 inline shrink-0" />
-        </a>
-      );
+      // Safe Link (allow only http(s) or relative root paths)
+      const hrefUrl = match[3].trim();
+      const isSafeUrl = /^https?:\/\//i.test(hrefUrl) || hrefUrl.startsWith("/");
+      if (isSafeUrl) {
+        parts.push(
+          <a
+            key={`link-${match.index}`}
+            href={hrefUrl}
+            target={hrefUrl.startsWith("/") ? undefined : "_blank"}
+            rel={hrefUrl.startsWith("/") ? undefined : "noopener noreferrer"}
+            className="text-blue-600 dark:text-blue-400 font-semibold underline underline-offset-2 hover:text-blue-800 dark:hover:text-blue-300 inline-flex items-center gap-0.5 mx-0.5"
+          >
+            <span>{match[2]}</span>
+            {!hrefUrl.startsWith("/") && <ExternalLink className="w-2.5 h-2.5 inline shrink-0" />}
+          </a>
+        );
+      } else {
+        parts.push(match[2]);
+      }
     } else if (match[7]) {
       // Citation pill [1], [2]
       parts.push(
@@ -85,7 +91,7 @@ function renderInline(text: string): React.ReactNode[] {
       parts.push(
         <code
           key={`c-${match.index}`}
-          className={`font-mono text-[11px] px-1.5 py-0.5 rounded-md border font-semibold ${
+          className={`inline-block leading-snug font-mono text-[11px] px-1.5 py-0.5 rounded-md border font-semibold ${
             isCost 
               ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-300/60 dark:border-emerald-700/60"
               : "bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border-slate-200/60 dark:border-slate-700/60"
@@ -279,6 +285,23 @@ export function MarkdownMessage({ content }: MarkdownMessageProps) {
           key={`hr-${i}`}
           className="my-3 border-t border-slate-200 dark:border-slate-800"
         />
+      );
+      i++;
+      continue;
+    }
+
+    // 6a. Heading 1 & 2: # / ##
+    if (trimmed.startsWith("# ") || trimmed.startsWith("## ")) {
+      const headingText = trimmed.replace(/^#{1,2}\s+/, "");
+      elements.push(
+        <div
+          key={`h2-${i}`}
+          className="mt-4 mb-2 pt-2 border-t border-slate-200/80 dark:border-slate-800 first:border-0 first:pt-0"
+        >
+          <h2 className="text-sm sm:text-base font-black tracking-tight text-slate-900 dark:text-white flex items-center gap-1.5">
+            {renderInline(headingText)}
+          </h2>
+        </div>
       );
       i++;
       continue;

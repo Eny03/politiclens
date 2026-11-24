@@ -190,7 +190,7 @@ export default function AuditPage() {
         <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-2xs col-span-2 sm:col-span-1">
           <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Sondaggi Aggiornati</span>
           <span className="text-xl sm:text-2xl font-black text-blue-600 dark:text-blue-400 mt-0.5 block">{stats?.sondaggi ?? pollCount}</span>
-          <span className="text-[10px] text-slate-500 mt-0.5 block">1 unico log 18 partiti</span>
+          <span className="text-[10px] text-slate-500 mt-0.5 block">1 unico log 22 partiti</span>
         </div>
       </div>
 

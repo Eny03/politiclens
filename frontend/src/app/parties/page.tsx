@@ -99,14 +99,22 @@ export default function PartiesPage() {
     "Centrosinistra",
     "Movimento 5 Stelle",
     "Centro / Liberaldemocratici",
-    "Sinistra Radicale",
-    "Sovranismo Popolare",
-    "Autonomie Regionali"
+    "Sinistra & Pacifisti",
+    "Sovranismo & Autonomie"
   ];
 
   const filteredParties = parties.filter((p) => {
     if (filterCoalition === "Tutte") return true;
-    return p.coalition.toLowerCase().includes(filterCoalition.toLowerCase());
+    const c = (p.coalition || "").toLowerCase();
+    if (filterCoalition === "Centrodestra") return c.includes("centrodestra") || c.includes("destra");
+    if (filterCoalition === "Centrosinistra") return c.includes("centrosinistra");
+    if (filterCoalition === "Movimento 5 Stelle") return p.code === "M5S" || c.includes("opposizione");
+    if (filterCoalition === "Centro / Liberaldemocratici") {
+      return (c.startsWith("centro") && !c.includes("centrodestra") && !c.includes("centrosinistra")) || c.includes("radicale / diritti");
+    }
+    if (filterCoalition === "Sinistra & Pacifisti") return c.includes("sinistra") && !c.includes("centrosinistra");
+    if (filterCoalition === "Sovranismo & Autonomie") return c.includes("sovranismo popolare") || c.includes("autonomie");
+    return c.includes(filterCoalition.toLowerCase());
   });
 
   const filteredProposals = partyProposals.filter((p) => {
@@ -114,7 +122,7 @@ export default function PartiesPage() {
     return p.macro_argomento === selectedTopic;
   });
 
-  // Macro-topics for filtering proposals
+  // All 11 canonical macro-topics for filtering proposals
   const MACRO_TOPICS = [
     "Fisco",
     "Lavoro",
@@ -123,7 +131,10 @@ export default function PartiesPage() {
     "Energia",
     "Istituzioni",
     "Immigrazione",
-    "Istruzione"
+    "Istruzione",
+    "Infrastrutture",
+    "Politica Estera",
+    "Diritti Civili"
   ];
 
   return (
@@ -335,6 +346,76 @@ export default function PartiesPage() {
                         </div>
                       </div>
 
+                      {/* Financial Assessment & Legislative Statistics Summary */}
+                      {partyDossier.valutazione_finanziaria && (
+                        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-xs space-y-3">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-100 dark:border-slate-800">
+                            <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                              <Coins className="w-4 h-4 text-amber-500" />
+                              <span>Quadro Finanziario & Sostenibilità (Art. 81 Cost.)</span>
+                            </h3>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="px-2.5 py-0.5 rounded-lg text-[11px] font-mono font-bold bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                                Coperture: {partyDossier.valutazione_finanziaria.score_fattibilita}
+                              </span>
+                              {partyDossier.valutazione_finanziaria.impegno_economico_stimato && (
+                                <span className="px-2.5 py-0.5 rounded-lg text-[11px] font-mono font-bold bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200">
+                                  Impegno: {partyDossier.valutazione_finanziaria.impegno_economico_stimato}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          {partyDossier.statistiche_atti && (
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
+                              <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800">
+                                <div className="text-[10px] font-bold uppercase text-slate-400">Atti Censiti</div>
+                                <div className="text-base font-black text-slate-900 dark:text-white font-mono">{partyDossier.statistiche_atti.totale_atti}</div>
+                              </div>
+                              <div className="p-2.5 rounded-xl bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-200/50 dark:border-emerald-900/40">
+                                <div className="text-[10px] font-bold uppercase text-emerald-600 dark:text-emerald-400">Verificati / Parz.</div>
+                                <div className="text-base font-black text-emerald-700 dark:text-emerald-300 font-mono">{partyDossier.statistiche_atti.verificati}</div>
+                              </div>
+                              <div className="p-2.5 rounded-xl bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200/50 dark:border-amber-900/40">
+                                <div className="text-[10px] font-bold uppercase text-amber-600 dark:text-amber-400">Attesa Copertura</div>
+                                <div className="text-base font-black text-amber-700 dark:text-amber-300 font-mono">{partyDossier.statistiche_atti.in_attesa_copertura}</div>
+                              </div>
+                              <div className="p-2.5 rounded-xl bg-rose-50/60 dark:bg-rose-950/20 border border-rose-200/50 dark:border-rose-900/40">
+                                <div className="text-[10px] font-bold uppercase text-rose-600 dark:text-rose-400">Esagerati / Inatt.</div>
+                                <div className="text-base font-black text-rose-700 dark:text-rose-300 font-mono">{partyDossier.statistiche_atti.esagerati_o_non_quantificati}</div>
+                              </div>
+                            </div>
+                          )}
+                          <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                            {partyDossier.valutazione_finanziaria.analisi_coperture}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Historical Legislative Evolution Timeline (2022 -> Present) */}
+                      {partyDossier.evoluzione_storica_legislatura && partyDossier.evoluzione_storica_legislatura.length > 0 && (
+                        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-xs space-y-3">
+                          <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                            <Clock className="w-4 h-4 text-indigo-500" />
+                            <span>Evoluzione Storica nella XIX Legislatura (2022 – Oggi)</span>
+                          </h3>
+                          <div className={`grid grid-cols-1 gap-3 ${partyDossier.evoluzione_storica_legislatura.length === 4 ? "md:grid-cols-2" : "md:grid-cols-3"}`}>
+                            {partyDossier.evoluzione_storica_legislatura.map((ev, eIdx) => (
+                              <div
+                                key={eIdx}
+                                className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-700/70 space-y-1.5"
+                              >
+                                <div className="text-[11px] font-extrabold text-indigo-700 dark:text-indigo-400 uppercase tracking-wide">
+                                  {ev.periodo}
+                                </div>
+                                <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
+                                  {ev.sintesi}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
                       {/* Key Policy Pillars */}
                       <div className="space-y-3">
                         <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
@@ -348,13 +429,14 @@ export default function PartiesPage() {
                               key={idx}
                               className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-2xs space-y-3"
                             >
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200">
-                                  {pil.tema}
-                                </span>
-                                <span className="text-[10px] font-semibold text-slate-400">
-                                  {pil.tipo_azione}
-                                </span>
+                              <div className="flex items-center justify-between gap-2 flex-wrap">
+                                <TopicBadge topic={pil.tema} />
+                                {pil.status_verifica && (
+                                  <StatusBadge status={pil.status_verifica} size="sm" />
+                                )}
+                              </div>
+                              <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                                {pil.tipo_azione}
                               </div>
 
                               <p className="text-xs font-bold text-slate-900 dark:text-slate-100 leading-snug">

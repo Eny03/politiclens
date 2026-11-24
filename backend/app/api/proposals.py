@@ -5,6 +5,7 @@ from sqlalchemy import or_
 from app.database import get_db
 from app.models import PoliticalProposal, PoliticalParty
 from app.schemas import PoliticalProposalDetail
+from app.api.admin import verify_admin_access
 
 router = APIRouter(prefix="/api/proposals", tags=["Proposte e Posizioni Politiche"])
 
@@ -30,7 +31,7 @@ def get_proposals(
     if topic:
         query = query.filter(PoliticalProposal.macro_argomento.ilike(f"%{topic}%"))
     if status:
-        query = query.filter(PoliticalProposal.fact_check_status.ilike(f"%{status}%"))
+        query = query.filter(PoliticalProposal.fact_check_status.ilike(status.strip()))
     if action_type:
         query = query.filter(PoliticalProposal.tipo_azione.ilike(f"%{action_type}%"))
     if year:
@@ -59,7 +60,7 @@ def get_proposals(
     return output
 
 @router.post("/audit-cleanup")
-def run_quality_cleanup(db: Session = Depends(get_db)):
+def run_quality_cleanup(auth: bool = Depends(verify_admin_access), db: Session = Depends(get_db)):
     """Triggers the QualityGatekeeperAgent to audit and purge invalid proposals, event titles or URL noise."""
     from app.ai.proposal_validator import purge_and_audit_invalid_proposals
     res = purge_and_audit_invalid_proposals(db)
@@ -82,7 +83,7 @@ def get_proposal_by_id(proposal_id: int, db: Session = Depends(get_db)):
     return detail
 
 @router.delete("/{proposal_id}")
-def delete_proposal_by_id(proposal_id: int, db: Session = Depends(get_db)):
+def delete_proposal_by_id(proposal_id: int, auth: bool = Depends(verify_admin_access), db: Session = Depends(get_db)):
     """Deletes an invalid proposal by ID and registers an audit log entry."""
     from app.models import AuditLog
     import datetime

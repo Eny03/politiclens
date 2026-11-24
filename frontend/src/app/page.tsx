@@ -89,6 +89,7 @@ const HISTORICAL_YEARS = [
   "Tutti i Periodi",
   `${CURRENT_YEAR} (In corso / Live)`,
   "Posizioni Recenti (2024–2025)",
+  "Archivio Storico (2022–2023)",
   "Sviluppi Futuri / DDL"
 ];
 
@@ -201,7 +202,7 @@ function DashboardContent() {
     const next = [...userCoalitions, newCoal];
     saveUserCoalitions(next);
     setActiveCoalitionFilter(newId);
-    setPollCoalitionFilter(newCoal.name);
+    setPollCoalitionFilter(newId);
     setNewCoalitionName("");
     setSelectedPartiesForCoalition([]);
     setShowCreateCoalitionModal(false);
@@ -273,7 +274,7 @@ function DashboardContent() {
       setError(null);
       const [statsData, propsData, schedData, partiesData, gapsData] = await Promise.all([
         fetchStatsOverview(),
-        fetchProposals({ limit: 350 }),
+        fetchProposals({ limit: 500 }),
         fetchSchedulerStatus().catch(() => null),
         fetchParties().catch(() => []),
         fetchDetectedGaps(4)
@@ -323,10 +324,9 @@ function DashboardContent() {
     // 2. Fetch fresh live data from server
     loadData();
 
-    // 3. Automated 10-minute polling update via internet search
+    // 3. Automated 10-minute read-only dashboard refresh (backend scheduler updates polls autonomously)
     const pollInterval = setInterval(async () => {
       try {
-        await triggerPollUpdate();
         const [statsData, partiesData] = await Promise.all([
           fetchStatsOverview(),
           fetchParties()
@@ -522,11 +522,14 @@ function DashboardContent() {
       );
     } else if (activeCoalitionFilter === "centro") {
       title = "Terzo Polo & Centro Liberaldemocratico";
-      targetRankings = allRankings.filter((p: any) => 
-        (p.coalition || "").toLowerCase().includes("centro") || 
-        (p.coalition || "").toLowerCase().includes("terzo polo") ||
-        (p.coalition || "").toLowerCase().includes("liberaldemocratici")
-      );
+      targetRankings = allRankings.filter((p: any) => {
+        const c = (p.coalition || "").toLowerCase();
+        return (
+          (c.startsWith("centro") && !c.includes("centrodestra") && !c.includes("centrosinistra")) ||
+          c.includes("terzo polo") ||
+          c.includes("liberaldemocratici")
+        );
+      });
     }
 
     const codes = targetRankings.map((p: any) => p.code);
@@ -565,14 +568,12 @@ function DashboardContent() {
     if (currentDashboardMetrics.isFiltered && selectedParty === "Tutti" && currentDashboardMetrics.parties.length > 0) {
       const matchesCoalition = currentDashboardMetrics.parties.some((cp: any) => 
         (p.party_id && cp.id && p.party_id === cp.id) ||
-        (cp.code && (p.partito || "").toLowerCase().includes(cp.code.toLowerCase())) ||
-        (cp.name && (p.partito || "").toLowerCase().includes(cp.name.toLowerCase())) ||
-        (cp.name && cp.name.toLowerCase().includes((p.partito || "").toLowerCase()))
+        (cp.name && (p.partito || "").toLowerCase() === cp.name.toLowerCase())
       );
       if (!matchesCoalition) return false;
     }
     if (selectedTopic !== "Tutti" && p.macro_argomento !== selectedTopic) return false;
-    if (selectedParty !== "Tutti" && !p.partito.toLowerCase().includes(selectedParty.toLowerCase())) return false;
+    if (selectedParty !== "Tutti" && p.partito.toLowerCase() !== selectedParty.toLowerCase()) return false;
     if (selectedYear !== "Tutti i Periodi" && selectedYear !== "Tutti gli Anni") {
       const pYear = p.timestamp ? new Date(p.timestamp).getFullYear() : 0;
       if (selectedYear.includes("Sviluppi Futuri")) {
@@ -594,7 +595,10 @@ function DashboardContent() {
     if (pollCoalitionFilter === "Tutti" || pollCoalitionFilter === "all") return true;
     if (pollCoalitionFilter === "Maggioranza") return (item.coalition || "").toLowerCase().includes("centrodestra");
     if (pollCoalitionFilter === "Opposizione") return (item.coalition || "").toLowerCase().includes("centrosinistra") || (item.coalition || "").toLowerCase().includes("opposizione") || (item.coalition || "").toLowerCase().includes("movimento 5 stelle");
-    if (pollCoalitionFilter === "Centro") return (item.coalition || "").toLowerCase().includes("centro") || (item.coalition || "").toLowerCase().includes("terzo polo");
+    if (pollCoalitionFilter === "Centro") {
+      const c = (item.coalition || "").toLowerCase();
+      return (c.startsWith("centro") && !c.includes("centrodestra") && !c.includes("centrosinistra")) || c.includes("terzo polo") || c.includes("liberaldemocratici");
+    }
     
     // Check if it's a custom coalition by id or name
     const customMatch = userCoalitions.find((c) => c.id === pollCoalitionFilter || c.name === pollCoalitionFilter);
@@ -653,28 +657,50 @@ function DashboardContent() {
   }, [stats?.party_rankings, statsSearchQuery, statsRatingFilter, statsSortBy]);
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto px-4 sm:px-6 py-4">
-      {/* 1. HERO BANNER: Focus on Manifesto, Political Ideas & Real Policies */}
-      <section className="relative overflow-hidden rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-6 sm:p-8 shadow-2xs">
-        <div className="relative z-10 max-w-3xl space-y-3">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 text-xs font-semibold">
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>Il Manifesto delle Idee Politiche Italiane</span>
+    <div className="space-y-4 sm:space-y-5 max-w-7xl mx-auto px-4 sm:px-6 py-4">
+      {/* 1. COMPACT EDITORIAL HERO BANNER with Instant Civic Actions */}
+      <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-white via-white to-blue-50/70 dark:from-slate-900 dark:via-slate-900/95 dark:to-blue-950/40 border border-slate-200/90 dark:border-slate-800/90 p-5 sm:p-6 shadow-sm">
+        {/* Subtle editorial top glow */}
+        <div className="pointer-events-none absolute -top-24 -right-24 w-72 h-72 rounded-full bg-blue-500/10 dark:bg-blue-500/15 blur-3xl" />
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="max-w-3xl space-y-2">
+            <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/70 border border-blue-200/80 dark:border-blue-800/80 text-blue-700 dark:text-blue-300 text-[11px] font-bold tracking-tight">
+              <Sparkles className="w-3 h-3" />
+              <span>Osservatorio Civico Indipendente • XIX Legislatura</span>
+            </div>
+
+            <h1 className="text-xl sm:text-3xl font-black text-slate-950 dark:text-white tracking-tight leading-tight">
+              Confronta Idee, Programmi e Coperture di Tutti i Partiti.
+            </h1>
+
+            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed max-w-2xl">
+              Analisi neutrale di proposte di legge e atti parlamentari con verifica tecnica di sostenibilità finanziaria (<strong>Art. 81 Cost. / MEF / UPB</strong>) e riscontro fattuale su dati ISTAT.
+            </p>
           </div>
 
-          <h1 className="text-2xl sm:text-4xl font-black text-slate-900 dark:text-white tracking-tight leading-tight">
-            PoliticLens: Esplora e Confronta le Idee e i Programmi di Tutti i Partiti.
-          </h1>
-
-          <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed max-w-2xl">
-            Osservatorio civico neutrale e indipendente: raccoglie e indicizza le proposte di legge, le posizioni e i manifesti politici in tempo reale. Consente ai cittadini di confrontare le visioni politiche, con scheda tecnica di fattibilità economica (Art. 81 Cost.) e veridicità delle affermazioni su dati Istat.
-          </p>
+          <div className="flex flex-wrap sm:flex-nowrap lg:flex-col xl:flex-row items-stretch sm:items-center gap-2 shrink-0">
+            <Link
+              href="/compare"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-sm shadow-blue-600/20 transition-all whitespace-nowrap"
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>Confronta 2 Partiti</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+            <Link
+              href="/chat"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white dark:bg-slate-800/90 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700 text-xs font-bold shadow-2xs transition-all whitespace-nowrap"
+            >
+              <Bot className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+              <span>Chiedi all'AI</span>
+            </Link>
+          </div>
         </div>
       </section>
 
 
-      {/* 2. STATS OVERVIEW CARDS: Focus on Ideas, Parties, Topics, and Technical Feasibility */}
-      <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      {/* 2. UNIFIED INSTITUTIONAL KPI STRIP */}
+      <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-3.5">
         {loading ? (
           Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xs animate-pulse space-y-2">
@@ -722,57 +748,73 @@ function DashboardContent() {
             )}
 
             {/* Card 1: Idee e Riforme del Manifesto */}
-            <div className="bg-white dark:bg-slate-900 p-3.5 sm:p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs transition-all">
-              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Idee & Proposte di Policy</div>
-              <div className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white mt-0.5">
+            <div className="bg-white dark:bg-slate-900/85 p-4 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-xs hover:border-blue-300 dark:hover:border-slate-700 transition-all relative overflow-hidden">
+              <div className="flex items-start justify-between gap-2">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Proposte Censite</div>
+                <div className="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-950/70 text-blue-600 dark:text-blue-400">
+                  <FileText className="w-3.5 h-3.5" />
+                </div>
+              </div>
+              <div className="text-2xl sm:text-3xl font-black text-slate-950 dark:text-white mt-1 font-mono tabular-nums tracking-tight">
                 {currentDashboardMetrics.totalProposals}
               </div>
-              <p className="text-[10px] text-slate-500 mt-0.5">
-                {currentDashboardMetrics.isFiltered ? `Atti censiti per ${currentDashboardMetrics.title}` : "Disegni di legge & atti programmatici"}
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 truncate">
+                {currentDashboardMetrics.isFiltered ? `Atti per ${currentDashboardMetrics.title}` : "DDL, decreti e manifesti 2022–2026"}
               </p>
             </div>
 
             {/* Card 2: Forze Mappate */}
-            <div className="bg-white dark:bg-slate-900 p-3.5 sm:p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs transition-all">
-              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Forze Mappate</div>
-              <div className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white mt-0.5">
+            <div className="bg-white dark:bg-slate-900/85 p-4 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-xs hover:border-indigo-300 dark:hover:border-slate-700 transition-all relative overflow-hidden">
+              <div className="flex items-start justify-between gap-2">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Forze Politiche</div>
+                <div className="p-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/70 text-indigo-600 dark:text-indigo-400">
+                  <Building2 className="w-3.5 h-3.5" />
+                </div>
+              </div>
+              <div className="text-2xl sm:text-3xl font-black text-slate-950 dark:text-white mt-1 font-mono tabular-nums tracking-tight">
                 {currentDashboardMetrics.totalParties}
               </div>
-              <p className="text-[10px] text-slate-500 mt-0.5">
-                {currentDashboardMetrics.isFiltered ? `Consenso totale: ${currentDashboardMetrics.totalPoll}%` : "Partiti di governo, opposizione e civici"}
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 truncate">
+                {currentDashboardMetrics.isFiltered ? `Consenso totale: ${currentDashboardMetrics.totalPoll}%` : "Maggioranza, opposizione e centro"}
               </p>
             </div>
 
             {/* Card 3: Macro-Aree di Riforma */}
-            <div className="bg-white dark:bg-slate-900 p-3.5 sm:p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs transition-all">
-              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Aree Tematiche di Policy</div>
-              <div className="text-xl sm:text-2xl font-black text-blue-600 dark:text-blue-400 mt-0.5">
-                11 Macro-Aree
+            <div className="bg-white dark:bg-slate-900/85 p-4 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-xs hover:border-cyan-300 dark:hover:border-slate-700 transition-all relative overflow-hidden">
+              <div className="flex items-start justify-between gap-2">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Aree Tematiche</div>
+                <div className="p-1.5 rounded-lg bg-cyan-50 dark:bg-cyan-950/70 text-cyan-600 dark:text-cyan-400">
+                  <Layers className="w-3.5 h-3.5" />
+                </div>
               </div>
-              <p className="text-[10px] text-slate-500 mt-0.5">
-                Fisco, Lavoro, Sanità, Pensioni, Giustizia e altre
+              <div className="flex items-baseline gap-1.5 mt-1">
+                <span className="text-2xl sm:text-3xl font-black text-slate-950 dark:text-white font-mono tabular-nums tracking-tight">11</span>
+                <span className="text-xs font-bold text-cyan-600 dark:text-cyan-400">100% coperte</span>
+              </div>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 truncate">
+                Fisco, Lavoro, Sanità, Pensioni, Energia…
               </p>
             </div>
 
             {/* Card 4: Scheda Tecnica (Veridicità & Coperture di Bilancio) */}
-            <div className="bg-white dark:bg-slate-900 p-3.5 sm:p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs transition-all">
-              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Quadro Tecnico & Risorse</div>
-              <div className="flex items-baseline gap-2 mt-0.5">
-                <span className="text-lg sm:text-xl font-black text-emerald-600 dark:text-emerald-400" title="Veridicità media delle affermazioni (confronto Istat)">
+            <div className="bg-white dark:bg-slate-900/85 p-4 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-xs hover:border-emerald-300 dark:hover:border-slate-700 transition-all relative overflow-hidden">
+              <div className="flex items-start justify-between gap-2">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Veridicità / Coperture</div>
+                <div className="p-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/70 text-emerald-600 dark:text-emerald-400">
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                </div>
+              </div>
+              <div className="flex items-baseline gap-2 mt-1 font-mono tabular-nums">
+                <span className="text-2xl sm:text-3xl font-black text-emerald-600 dark:text-emerald-400 tracking-tight" title="Veridicità media delle affermazioni (confronto Istat)">
                   {currentDashboardMetrics.avgTruth}%
                 </span>
-                <span className="text-xs text-slate-300 dark:text-slate-700">•</span>
-                <span className="text-lg sm:text-xl font-black text-blue-600 dark:text-blue-400" title="Coperture di bilancio (Art. 81 Cost.)">
+                <span className="text-slate-300 dark:text-slate-700 font-sans">/</span>
+                <span className="text-lg sm:text-xl font-extrabold text-blue-600 dark:text-blue-400" title="Coperture di bilancio (Art. 81 Cost.)">
                   {currentDashboardMetrics.avgFinance}%
                 </span>
-                {stats?.truthfulness_trend && (
-                  <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-1.5 py-0.2 rounded ml-auto">
-                    {stats.truthfulness_trend} sett.
-                  </span>
-                )}
               </div>
-              <p className="text-[10px] text-slate-500 mt-0.5 truncate">
-                Dati veritieri vs coperture ex Art. 81 Cost.
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 truncate">
+                Fatti ISTAT vs coperture Art. 81 Cost.
               </p>
             </div>
 
@@ -780,51 +822,51 @@ function DashboardContent() {
         )}
       </section>
 
-      {/* 3. MAIN NAVIGATION TABS */}
+      {/* 3. BALANCED 3-COLUMN SEGMENTED NAVIGATION TABS */}
       <section className="space-y-4">
-        <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-slate-100 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 overflow-x-auto scrollbar-none">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 p-1.5 rounded-2xl bg-slate-200/70 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800">
           <button
             onClick={() => setActiveTab("proposte")}
-            className={`flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 py-2 px-3.5 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap ${
+            className={`inline-flex items-center justify-center gap-2 py-2.5 px-3.5 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap ${
               activeTab === "proposte"
-                ? "bg-white dark:bg-slate-800 text-slate-950 dark:text-white shadow-2xs"
-                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                ? "bg-white dark:bg-slate-800 text-slate-950 dark:text-white shadow-sm ring-1 ring-slate-200/70 dark:ring-slate-700"
+                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/50 dark:hover:bg-slate-800/40"
             }`}
           >
             <FileText className={`w-4 h-4 ${activeTab === "proposte" ? "text-blue-600 dark:text-blue-400" : ""}`} />
             <span>Manifesto & Idee</span>
-            <span className="text-[10px] px-1.5 py-0.5 rounded-md font-semibold bg-blue-50 text-blue-800 dark:bg-blue-950 dark:text-blue-300">
+            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md font-bold bg-blue-50 text-blue-700 dark:bg-blue-950/80 dark:text-blue-300">
               {filteredProposals.length}
             </span>
           </button>
 
           <button
             onClick={() => setActiveTab("sondaggi")}
-            className={`flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 py-2 px-3.5 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap ${
+            className={`inline-flex items-center justify-center gap-2 py-2.5 px-3.5 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap ${
               activeTab === "sondaggi"
-                ? "bg-white dark:bg-slate-800 text-slate-950 dark:text-white shadow-2xs"
-                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                ? "bg-white dark:bg-slate-800 text-slate-950 dark:text-white shadow-sm ring-1 ring-slate-200/70 dark:ring-slate-700"
+                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/50 dark:hover:bg-slate-800/40"
             }`}
           >
             <TrendingUp className={`w-4 h-4 ${activeTab === "sondaggi" ? "text-emerald-600 dark:text-emerald-400" : ""}`} />
             <span>Sondaggi Nazionali</span>
-            <span className="text-[10px] px-1.5 py-0.5 rounded-md font-semibold bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
-              Media 6 Istituti
+            <span className="text-[10px] px-1.5 py-0.5 rounded-md font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/80 dark:text-emerald-300">
+              6 Istituti
             </span>
           </button>
 
           <button
             onClick={() => setActiveTab("statistiche")}
-            className={`flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 py-2 px-3.5 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap ${
+            className={`inline-flex items-center justify-center gap-2 py-2.5 px-3.5 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap ${
               activeTab === "statistiche"
-                ? "bg-white dark:bg-slate-800 text-slate-950 dark:text-white shadow-2xs"
-                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                ? "bg-white dark:bg-slate-800 text-slate-950 dark:text-white shadow-sm ring-1 ring-slate-200/70 dark:ring-slate-700"
+                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/50 dark:hover:bg-slate-800/40"
             }`}
           >
             <ShieldCheck className={`w-4 h-4 ${activeTab === "statistiche" ? "text-amber-600 dark:text-amber-400" : ""}`} />
             <span>Quadro Tecnico & Risorse</span>
-            <span className="text-[10px] px-1.5 py-0.5 rounded-md font-semibold bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-300">
-              Art. 81 vs Istat
+            <span className="text-[10px] px-1.5 py-0.5 rounded-md font-bold bg-amber-50 text-amber-700 dark:bg-amber-950/80 dark:text-amber-300">
+              Art. 81
             </span>
           </button>
         </div>
@@ -834,7 +876,7 @@ function DashboardContent() {
         {activeTab === "proposte" && (
           <div className="space-y-4">
             {/* Filter Controls Bar */}
-            <div className="bg-white dark:bg-slate-900 p-3.5 sm:p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs space-y-3">
+            <div className="bg-white/95 dark:bg-slate-900/85 backdrop-blur-xs p-3.5 sm:p-4 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-xs space-y-3">
               <div className="flex flex-col sm:flex-row gap-2.5">
                 <div className="relative flex-1">
                   <input
@@ -842,7 +884,7 @@ function DashboardContent() {
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Cerca per tema o parola chiave (es. salario minimo, flat tax, sanità)..."
-                    className="w-full text-xs sm:text-sm bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 rounded-xl pl-9 pr-4 py-2.5 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                    className="w-full text-xs sm:text-sm bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-700/80 rounded-xl pl-9 pr-4 py-2.5 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-blue-500/70 focus:border-blue-500 transition-all"
                   />
                   <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
                   {searchQuery && (
@@ -859,7 +901,7 @@ function DashboardContent() {
                   <select
                     value={selectedParty}
                     onChange={(e) => setSelectedParty(e.target.value)}
-                    className="w-full min-w-0 text-xs sm:text-sm bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 rounded-xl px-2.5 sm:px-3 py-2 text-slate-800 dark:text-slate-200 focus:outline-hidden font-medium truncate"
+                    className="w-full min-w-0 text-xs sm:text-sm bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-700/80 rounded-xl px-3 py-2.5 text-slate-800 dark:text-slate-200 focus:outline-hidden focus:ring-2 focus:ring-blue-500/70 font-semibold truncate cursor-pointer"
                   >
                     <option value="Tutti">Tutti i Partiti</option>
                     {parties.map((p) => (
@@ -872,7 +914,7 @@ function DashboardContent() {
                   <select
                     value={selectedYear}
                     onChange={(e) => setSelectedYear(e.target.value)}
-                    className="w-full min-w-0 text-xs sm:text-sm bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 rounded-xl px-2.5 sm:px-3 py-2 text-slate-800 dark:text-slate-200 focus:outline-hidden font-medium truncate"
+                    className="w-full min-w-0 text-xs sm:text-sm bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-700/80 rounded-xl px-3 py-2.5 text-slate-800 dark:text-slate-200 focus:outline-hidden focus:ring-2 focus:ring-blue-500/70 font-semibold truncate cursor-pointer"
                   >
                     {HISTORICAL_YEARS.map((y) => (
                       <option key={y} value={y}>
@@ -884,18 +926,18 @@ function DashboardContent() {
               </div>
 
               {/* Topic chips - Wraps cleanly on Desktop PC and Mobile */}
-              <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider shrink-0 mr-1">
+              <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-slate-100 dark:border-slate-800/70">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider shrink-0 mr-1 mt-1">
                   Macro-Tema:
                 </span>
                 {MACRO_TOPICS.map((topic) => (
                   <button
                     key={topic}
                     onClick={() => setSelectedTopic(topic)}
-                    className={`px-3 py-1 rounded-full text-xs font-semibold shrink-0 transition-all ${
+                    className={`mt-1 px-3 py-1 rounded-full text-xs font-semibold shrink-0 transition-all border ${
                       selectedTopic === topic
-                        ? "bg-blue-600 text-white shadow-xs"
-                        : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+                        ? "bg-blue-600 text-white border-blue-500 shadow-xs shadow-blue-600/25"
+                        : "bg-slate-100/90 dark:bg-slate-800/75 text-slate-600 dark:text-slate-300 border-transparent hover:border-slate-300 dark:hover:border-slate-600 hover:bg-slate-200/70 dark:hover:bg-slate-800"
                     }`}
                   >
                     {topic}
@@ -922,7 +964,7 @@ function DashboardContent() {
                   onClick={() => {
                     setSelectedTopic("Tutti");
                     setSelectedParty("Tutti");
-                    setSelectedYear("Tutti gli Anni");
+                    setSelectedYear("Tutti i Periodi");
                     setSearchQuery("");
                   }}
                   className="mt-3 text-xs text-blue-600 dark:text-blue-400 font-bold hover:underline"
@@ -1395,7 +1437,7 @@ function DashboardContent() {
                                 setPollCoalitionFilter("Tutti");
                               } else {
                                 setActiveCoalitionFilter(uc.id);
-                                setPollCoalitionFilter(uc.name);
+                                setPollCoalitionFilter(uc.id);
                               }
                             }}
                             className={`w-full py-1.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${

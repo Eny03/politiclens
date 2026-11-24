@@ -122,6 +122,16 @@ export function Navbar() {
     },
   ];
 
+  const desktopNav = [
+    { label: "Manifesto", href: "/", icon: <Compass className="w-3.5 h-3.5" /> },
+    { label: "Confronto", href: "/compare", icon: <Layers className="w-3.5 h-3.5" /> },
+    { label: "Partiti", href: "/parties", icon: <Building2 className="w-3.5 h-3.5" /> },
+    { label: "Chat AI", href: "/chat", icon: <Bot className="w-3.5 h-3.5" /> },
+    { label: "Fact-Check", href: "/fact-check", icon: <ShieldCheck className="w-3.5 h-3.5" /> },
+    { label: "Fonti", href: "/sources", icon: <Rss className="w-3.5 h-3.5" /> },
+    { label: "Audit", href: "/audit", icon: <History className="w-3.5 h-3.5" /> },
+  ];
+
   return (
     <>
       <header className="sticky top-0 z-40 w-full max-w-full bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200/90 dark:border-slate-800 shadow-2xs">
@@ -133,9 +143,9 @@ export function Navbar() {
         </div>
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
+          <div className="flex items-center justify-between h-16 gap-3">
             {/* Brand Logo: Solo Icona, Nome App e Live */}
-            <Link href="/" className="flex items-center gap-2 sm:gap-3 group min-w-0">
+            <Link href="/" className="flex items-center gap-2 sm:gap-3 group min-w-0 shrink-0">
               <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-slate-900 dark:bg-blue-600 flex items-center justify-center text-white shadow-md group-hover:scale-105 transition-transform border border-slate-700/50 shrink-0">
                 <Scale className="w-4 h-4 sm:w-5 sm:h-5 text-amber-300 dark:text-white" />
               </div>
@@ -150,12 +160,43 @@ export function Navbar() {
               </div>
             </Link>
 
-            {/* Right Action: Three Dots (⋮) Menu Button */}
-            <div className="flex items-center gap-2">
+            {/* Direct Desktop Navigation Links */}
+            <nav aria-label="Navigazione principale" className="hidden lg:flex items-center gap-1 bg-slate-100/80 dark:bg-slate-800/70 p-1 rounded-2xl border border-slate-200/70 dark:border-slate-700/70">
+              {desktopNav.map((item) => {
+                const isActive = pathname === item.href;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+                      isActive
+                        ? "bg-white dark:bg-slate-900 text-blue-700 dark:text-blue-400 shadow-xs"
+                        : "text-slate-600 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white hover:bg-white/60 dark:hover:bg-slate-800"
+                    }`}
+                  >
+                    {item.icon}
+                    <span>{item.label}</span>
+                  </Link>
+                );
+              })}
+            </nav>
+
+            {/* Right Actions: Quick Theme Toggle + Menu Drawer */}
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={toggleTheme}
+                className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-colors flex items-center justify-center min-h-[40px] min-w-[40px] shadow-2xs cursor-pointer"
+                aria-label={isDark ? "Attiva tema chiaro" : "Attiva tema scuro"}
+                title={isDark ? "Tema Chiaro" : "Tema Scuro"}
+              >
+                {isDark ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-slate-600" />}
+              </button>
+
               <button
                 type="button"
                 onClick={() => setMenuOpen((prev) => !prev)}
-                className="p-2 sm:px-2.5 sm:py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 transition-colors flex items-center justify-center min-h-[44px] min-w-[44px] shadow-2xs relative z-50 cursor-pointer"
+                className="p-2 sm:px-2.5 sm:py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 transition-colors flex items-center justify-center min-h-[40px] min-w-[40px] shadow-2xs relative z-50 cursor-pointer"
                 aria-label="Menu laterale (tutte le sezioni)"
                 title="Menu principale (⋮)"
               >

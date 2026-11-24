@@ -44,7 +44,7 @@ def get_monitored_sources():
 
 @router.get("/gaps")
 def get_detected_information_gaps(
-    limit: int = Query(100, ge=1, le=200),
+    limit: int = Query(100, ge=1, le=300),
     party: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
@@ -75,7 +75,7 @@ def trigger_dossiers_update(db: Session = Depends(get_db)):
     """Regenerates the enhanced AI dossiers and metrics for all political parties."""
     from app.ingestion.dossier_generator import update_all_party_dossiers
     update_all_party_dossiers(db)
-    return {"status": "UPDATED", "message": "Dossier strategici e parametri finanziari dei 18 partiti aggiornati con successo."}
+    return {"status": "UPDATED", "message": "Dossier strategici e parametri finanziari dei 22 partiti aggiornati con successo."}
 
 @router.post("/consensus/trigger")
 async def trigger_multi_agent_consensus(background_tasks: BackgroundTasks):
@@ -112,27 +112,55 @@ async def ingest_manual(req: IngestionRequest, db: Session = Depends(get_db)):
     
     saved_proposals = []
     from app.ai.policy_merger import find_matching_existing_proposal, merge_or_update_policy_proposal
+    from app.ai.fact_checker import analyze_feasibility_and_factcheck
+    from app.models import AuditLog
+
     for item in extracted_items:
         party_obj = db.query(PoliticalParty).filter(
-            (PoliticalParty.name.ilike(f"%{item.partito}%")) |
-            (PoliticalParty.code.ilike(f"%{item.partito}%"))
+            (PoliticalParty.name.ilike(item.partito)) |
+            (PoliticalParty.code.ilike(item.partito))
         ).first()
+        if not party_obj:
+            party_obj = db.query(PoliticalParty).filter(PoliticalParty.name.ilike(f"%{item.partito}%")).first()
         party_id = party_obj.id if party_obj else None
+        canonical_party = party_obj.name if party_obj else item.partito
+        item.partito = canonical_party
 
-        text_to_embed = f"{item.partito} {item.macro_argomento} {item.dichiarazione_sintesi}"
+        text_to_embed = f"{canonical_party} {item.macro_argomento} {item.dichiarazione_sintesi}"
         emb_list = await get_text_embedding(text_to_embed)
         emb_json = json.dumps(emb_list) if emb_list else None
-        
+        # Per-item unique hash prevents IntegrityError when 2+ proposals come from the same article
+        item_hash = compute_content_hash(f"{canonical_party}_{item.macro_argomento}_{item.dichiarazione_sintesi}")
+
+        feas_fc, fc_st, fc_mot, fc_src, truth_sc = analyze_feasibility_and_factcheck(
+            partito=canonical_party,
+            macro_argomento=item.macro_argomento,
+            sintesi=item.dichiarazione_sintesi,
+            costo_stimato=item.impatto_economico.costo_stimato,
+            coperture=item.impatto_economico.coperture_dichiarate,
+            raw_text=text[:2000],
+            tipo_azione=item.tipo_azione
+        )
+        item.fact_check.status = fc_st
+        item.fact_check.motivazione_oggettiva = fc_mot
+        item.fact_check.fonte_verifica = fc_src
+
         matching_existing = find_matching_existing_proposal(
             db=db,
             party_id=party_id,
-            partito=item.partito,
+            partito=canonical_party,
             macro_argomento=item.macro_argomento,
             dichiarazione_sintesi=item.dichiarazione_sintesi,
-            emb_list=emb_list
+            emb_list=emb_list,
+            new_timestamp=datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
         )
 
         if matching_existing:
+            old_syn = matching_existing.dichiarazione_sintesi
+            safe_hash = item_hash if not db.query(PoliticalProposal).filter(
+                PoliticalProposal.content_hash == item_hash,
+                PoliticalProposal.id != matching_existing.id
+            ).first() else matching_existing.content_hash
             proposal_record = merge_or_update_policy_proposal(
                 db=db,
                 existing=matching_existing,
@@ -142,37 +170,64 @@ async def ingest_manual(req: IngestionRequest, db: Session = Depends(get_db)):
                 source_name="Inserimento Diretto / Scraper",
                 published_at=datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None),
                 raw_text=text[:2000],
-                content_hash=content_hash,
+                content_hash=safe_hash,
                 emb_json=emb_json
             )
+            proposal_record.truth_score = truth_sc
+            db.add(AuditLog(
+                event_type="modifica",
+                entity_type="programma",
+                entity_id=str(proposal_record.id),
+                entity_name=f"{canonical_party}: {item.macro_argomento}",
+                old_value=old_syn[:90] + "..." if len(old_syn) > 90 else old_syn,
+                new_value=item.dichiarazione_sintesi[:90] + "..." if len(item.dichiarazione_sintesi) > 90 else item.dichiarazione_sintesi,
+                agent_responsible="ManualIngestionAgent",
+                details=f"Aggiornamento manuale posizione per {canonical_party} ({item.macro_argomento}).",
+                timestamp=datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+            ))
             db.commit()
             db.refresh(proposal_record)
         else:
-            from app.ai.fact_checker import calculate_proposal_truthfulness_score
-            proposal_record = PoliticalProposal(
-                party_id=party_id,
-                partito=item.partito,
-                macro_argomento=item.macro_argomento,
-                dichiarazione_sintesi=item.dichiarazione_sintesi,
-                tipo_azione=item.tipo_azione,
-                costo_stimato=item.impatto_economico.costo_stimato,
-                coperture_dichiarate=item.impatto_economico.coperture_dichiarate,
-                fattibilita_finanziaria=item.impatto_economico.fattibilita_finanziaria,
-                fact_check_status=item.fact_check.status,
-                fact_check_motivazione=item.fact_check.motivazione_oggettiva,
-                fact_check_fonte=item.fact_check.fonte_verifica,
-                truth_score=calculate_proposal_truthfulness_score(item.fact_check.status),
-                fonte_url=item.fonte_url or url,
-                fonte_titolo=title,
-                fonte_testata="Inserimento Diretto / Scraper",
-                raw_text=text[:2000],
-                content_hash=content_hash,
-                embedding=emb_json,
-                timestamp=datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
-            )
-            db.add(proposal_record)
-            db.commit()
-            db.refresh(proposal_record)
+            existing_hash_rec = db.query(PoliticalProposal).filter(PoliticalProposal.content_hash == item_hash).first()
+            if existing_hash_rec:
+                proposal_record = existing_hash_rec
+            else:
+                proposal_record = PoliticalProposal(
+                    party_id=party_id,
+                    partito=canonical_party,
+                    macro_argomento=item.macro_argomento,
+                    dichiarazione_sintesi=item.dichiarazione_sintesi,
+                    tipo_azione=item.tipo_azione,
+                    costo_stimato=item.impatto_economico.costo_stimato,
+                    coperture_dichiarate=item.impatto_economico.coperture_dichiarate,
+                    fattibilita_finanziaria=item.impatto_economico.fattibilita_finanziaria or feas_fc,
+                    fact_check_status=fc_st,
+                    fact_check_motivazione=fc_mot,
+                    fact_check_fonte=fc_src,
+                    truth_score=truth_sc,
+                    fonte_url=item.fonte_url or url,
+                    fonte_titolo=title,
+                    fonte_testata="Inserimento Diretto / Scraper",
+                    raw_text=text[:2000],
+                    content_hash=item_hash,
+                    embedding=emb_json,
+                    timestamp=datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+                )
+                db.add(proposal_record)
+                db.flush()
+                db.add(AuditLog(
+                    event_type="aggiunta",
+                    entity_type="programma",
+                    entity_id=str(proposal_record.id),
+                    entity_name=f"{canonical_party}: {item.macro_argomento}",
+                    old_value=None,
+                    new_value=item.dichiarazione_sintesi[:90] + "..." if len(item.dichiarazione_sintesi) > 90 else item.dichiarazione_sintesi,
+                    agent_responsible="ManualIngestionAgent",
+                    details=f"Aggiunta manuale proposta per {canonical_party} ({item.macro_argomento}): '{item.dichiarazione_sintesi}'.",
+                    timestamp=datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+                ))
+                db.commit()
+                db.refresh(proposal_record)
         
         detail = PoliticalProposalDetail.model_validate(proposal_record)
         detail.party_color = party_obj.color if party_obj else "#3b82f6"

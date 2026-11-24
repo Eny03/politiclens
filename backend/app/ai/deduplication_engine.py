@@ -74,16 +74,16 @@ def is_duplicate_proposal(
     Returns (True, reason) if text_a and text_b represent the same policy reform.
     Calibrated to prevent false positives and accidental erasure of distinct policy positions.
     """
-    # Rule 0: Must belong to the same party and macro-topic
+    # Rule 0: Must belong to the same party
     if party_a.strip().lower() != party_b.strip().lower():
         return False, "Different parties"
-    if topic_a.strip().lower() != topic_b.strip().lower():
-        return False, "Different topics"
+
+    same_topic = topic_a.strip().lower() == topic_b.strip().lower()
 
     t1 = text_a.lower().strip()
     t2 = text_b.lower().strip()
 
-    # Rule 1: Exact string match
+    # Rule 1: Exact string match (even across topics!)
     if t1 == t2:
         return True, "Exact match"
 
@@ -93,36 +93,44 @@ def is_duplicate_proposal(
     if t1_opp != t2_opp:
         return False, "Opposing political stances (in favor vs opposition)"
 
-    # Rule 2: Policy Subject Cluster match (must share substantive content words, not just the keyword)
     words1 = clean_and_tokenize(t1)
     words2 = clean_and_tokenize(t2)
     common = words1 & words2
+    ratio = SequenceMatcher(None, t1, t2).ratio()
 
+    # Cross-topic strict duplicate guard (prevents same proposal cloned under Economia vs Fisco, Giustizia vs Istituzioni)
+    if not same_topic:
+        if ratio >= 0.72:
+            return True, f"Cross-topic high similarity {ratio:.2f}"
+        if len(words1) > 0 and len(words2) > 0:
+            containment = len(common) / min(len(words1), len(words2))
+            if containment >= 0.70 and len(common) >= 4:
+                return True, f"Cross-topic word containment {containment:.2f} ({len(common)} shared)"
+        return False, "Different topics"
+
+    # Rule 2: Policy Subject Cluster match (must share substantive content words, not just the keyword)
     for cluster in POLICY_CLUSTERS:
         has_1 = any(term in t1 for term in cluster)
         has_2 = any(term in t2 for term in cluster)
         if has_1 and has_2:
-            # Require at least 2 common substantive words or ratio >= 0.50 to avoid false positives
-            if len(common) >= 2 or SequenceMatcher(None, t1, t2).ratio() >= 0.50:
+            if len(common) >= 2 or ratio >= 0.50:
                 return True, f"Matched subject cluster: {cluster[0]} with shared substantive context"
 
     # Rule 3: Asymmetric Substantive Word Containment
-    # (dividing by min ensures a detailed version matches a concise version)
     if len(words1) > 0 and len(words2) > 0:
         containment = len(common) / min(len(words1), len(words2))
         if containment >= 0.55 and len(common) >= 4:
             return True, f"Word containment {containment:.2f} ({len(common)} shared substantive words)"
 
-    # Rule 4: String Sequence Similarity (calibrated from 0.48 to 0.72 to prevent false positives)
-    ratio = SequenceMatcher(None, t1, t2).ratio()
+    # Rule 4: String Sequence Similarity
     if ratio >= 0.72:
         return True, f"SequenceMatcher ratio {ratio:.2f}"
 
-    # Rule 5: Semantic Embedding Cosine Similarity (calibrated threshold)
+    # Rule 5: Semantic Embedding Cosine Similarity
     if emb_a and emb_b:
         try:
             sim = cosine_similarity(emb_a, emb_b)
-            if sim >= 0.82:
+            if sim >= 0.84:
                 return True, f"Embedding similarity {sim:.2f}"
         except Exception:
             pass

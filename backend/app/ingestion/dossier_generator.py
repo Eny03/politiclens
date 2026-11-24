@@ -20,7 +20,7 @@ PARTY_PROFILES_KNOWLEDGE_BASE: Dict[str, Dict[str, Any]] = {
             "Riforma IRPEF a tre aliquote (23%, 35%, 43%) e concordato preventivo biennale"
         ],
         "evoluzione_2022_2026": [
-            {"periodo": "2022 (Campagna elettorale)", "sintesi": "Proposta di blocco navale navale per l'immigrazione e taglio drastico delle accise sui carburanti."},
+            {"periodo": "2022 (Campagna elettorale)", "sintesi": "Proposta di blocco navale per l'immigrazione e taglio drastico delle accise sui carburanti."},
             {"periodo": "2023-2024 (Esercizio di governo)", "sintesi": "Pragmatismo multilaterale: transizione dal blocco navale al Piano Mattei e accordo Albania; sterilizzazione del cuneo anziché taglio accise."},
             {"periodo": "2025-2026 (Consolidamento)", "sintesi": "Accorpamento del taglio cuneo con l'IRPEF a tre aliquote resa strutturale e accelerazione sul Premierato in Parlamento."}
         ],
@@ -407,7 +407,7 @@ def generate_party_dossier(party: PoliticalParty, db: Session) -> Dict[str, Any]
     Combines the deep institutional knowledge base with live database records.
     """
     proposals = db.query(PoliticalProposal).filter(
-        (PoliticalProposal.party_id == party.id) | (PoliticalProposal.partito.ilike(f"%{party.name}%"))
+        (PoliticalProposal.party_id == party.id) | (PoliticalProposal.partito == party.name)
     ).order_by(PoliticalProposal.timestamp.desc()).all()
 
     # Economic benchmarks for comparison
@@ -420,11 +420,12 @@ def generate_party_dossier(party: PoliticalParty, db: Session) -> Dict[str, Any]
         topic_groups.setdefault(p.macro_argomento, []).append(p)
 
     total_props = len(proposals)
-    verified_count = sum(1 for p in proposals if p.fact_check_status == "Verificato")
+    verified_count = sum(1 for p in proposals if p.fact_check_status in ("Verificato", "Parzialmente verificato"))
     pending_coverage = sum(1 for p in proposals if p.fact_check_status == "In attesa di copertura")
-    exaggerated_count = sum(1 for p in proposals if p.fact_check_status in ["Esagerato", "Fake / Infondato"])
+    exaggerated_count = sum(1 for p in proposals if p.fact_check_status in ("Esagerato", "Inattuabile", "Fake / Infondato"))
 
-    feasibility_score = round(sum(calculate_proposal_truthfulness_score(p.fact_check_status, getattr(p, "truth_score", None)) for p in proposals) / total_props) if total_props > 0 else 80
+    truth_score_avg = round(sum(calculate_proposal_truthfulness_score(p.fact_check_status, getattr(p, "truth_score", None)) for p in proposals) / total_props, 1) if total_props > 0 else 75.0
+    fin_score_avg = round(sum(calculate_financial_coverage_percentage(p.costo_stimato, p.coperture_dichiarate, p.dichiarazione_sintesi) for p in proposals) / total_props, 1) if total_props > 0 else 65.0
 
     # Fetch Specialized Strategic Knowledge Profile for this party
     profile = PARTY_PROFILES_KNOWLEDGE_BASE.get(party.name, None)
@@ -467,11 +468,18 @@ def generate_party_dossier(party: PoliticalParty, db: Session) -> Dict[str, Any]
         by_year_map = {}
         for p in sorted(future_props, key=lambda x: x.timestamp or datetime.datetime.min):
             by_year_map.setdefault(p.timestamp.year, []).append(p)
+        def _truncate_clean(txt: str, limit: int = 95) -> str:
+            t = (txt or "").strip()
+            if len(t) <= limit:
+                return t
+            cut = t[:limit].rsplit(" ", 1)[0].rstrip(",;:-–— ")
+            return (cut or t[:limit]) + "…"
+
         for yr, p_list in by_year_map.items():
             if yr >= 2026:
                 label = f"{yr} (Sviluppi & Iniziative Recenti)" if yr <= current_year else f"{yr} (Proiezioni & DDL Futuri)"
                 if not any(ev.get("periodo", "").startswith(f"{yr} (") for ev in evoluzione_storica):
-                    summaries = " • ".join([f"[{p.macro_argomento}] {p.dichiarazione_sintesi[:80]}" for p in p_list[:2]])
+                    summaries = " • ".join([f"[{p.macro_argomento}] {_truncate_clean(p.dichiarazione_sintesi, 95)}" for p in p_list[:2]])
                     evoluzione_storica.append({
                         "periodo": label,
                         "sintesi": f"Aggiornamento programmatico dinamico: {summaries}"
@@ -517,26 +525,38 @@ def generate_party_dossier(party: PoliticalParty, db: Session) -> Dict[str, Any]
                 "fonte_testata": item.fonte_testata or "Fonti Istituzionali / Stampa Nazionale"
             })
 
-    # 3. Macroeconomic Cost Computation and Financial Audit
+    # 3. Macroeconomic Cost Computation and Financial Audit (excludes savings/revenue/neutral items)
     quantified_costs_numeric = []
     for p in proposals:
-        if p.costo_stimato and p.costo_stimato != "Non quantificato":
-            m = re.search(r"(\d+(?:[.,]\d+)?)\s*(?:miliardi|mld)", p.costo_stimato, re.I)
-            if m:
-                val = float(m.group(1).replace(",", "."))
-                quantified_costs_numeric.append(val)
+        cs = (p.costo_stimato or "").strip()
+        cs_low = cs.lower()
+        if not cs or "non quantificat" in cs_low or any(w in cs_low for w in ["invarianza", "saldo neutro", "risparmio", "gettito", "saldo positivo", "zero costi", "costi nulli"]):
+            continue
+        m_range = re.search(r"(\d+(?:[.,]\d+)?)\s*[-–—]\s*(\d+(?:[.,]\d+)?)\s*(?:miliard|mld)", cs, re.I)
+        if m_range:
+            v1 = float(m_range.group(1).replace(",", "."))
+            v2 = float(m_range.group(2).replace(",", "."))
+            quantified_costs_numeric.append((v1 + v2) / 2.0)
+            continue
+        m = re.search(r"(\d+(?:[.,]\d+)?)\s*(?:miliardi|mld)", cs, re.I)
+        if m:
+            quantified_costs_numeric.append(float(m.group(1).replace(",", ".")))
+            continue
+        m_mln = re.search(r"(\d+(?:[.,]\d+)?)\s*(?:milioni|mln)", cs, re.I)
+        if m_mln:
+            quantified_costs_numeric.append(float(m_mln.group(1).replace(",", ".")) / 1000.0)
 
     totale_mld_stimato = round(sum(quantified_costs_numeric), 1) if quantified_costs_numeric else None
     spesa_str = f"~{totale_mld_stimato} Mld €" if totale_mld_stimato else "Quantificata per singoli capitoli di spesa"
 
     valutazione_finanziaria = {
-        "score_fattibilita": f"{feasibility_score}%",
-        "atti_quantificati": f"{len(quantified_costs_numeric)} su {total_props} posizioni censite",
+        "score_fattibilita": f"{fin_score_avg}%",
+        "atti_quantificati": f"{len(quantified_costs_numeric)} su {total_props} posizioni con onere di spesa",
         "impegno_economico_stimato": spesa_str,
         "analisi_coperture": (
-            f"Dall'analisi delle proposte rilevate e catalogate dall'AI, {party.name} presenta {verified_count} misure "
-            f"pienamente compatibili con i vincoli di finanza pubblica certificati da MEF, ISTAT e Corte dei Conti. "
-            f"Al contempo, {pending_coverage} proposte risultano in attesa di dettagli operativi o dipendono da tagli di spesa/maggiori entrate tributarie. "
+            f"Dall'analisi delle proposte catalogate dall'AI, {party.name} presenta un indice di veridicità fattuale del {truth_score_avg}% "
+            f"e una copertura finanziaria media stimata del {fin_score_avg}% (Art. 81 Cost.). "
+            f"Risultano {verified_count} atti verificati o incardinati in Parlamento e {exaggerated_count} proposte con criticità econometriche o attuative. "
             f"L'osservatorio parametrizza ogni programma rispetto ai vincoli macroeconomici dello Stato: PIL nominale (~2.120 Mld €), "
             f"Debito Pubblico al 137,3% e capienza ordinaria della Legge di Bilancio fissata a circa 30 Mld € annui."
         )
@@ -562,7 +582,7 @@ def generate_party_dossier(party: PoliticalParty, db: Session) -> Dict[str, Any]
         "evoluzione_storica_legislatura": evoluzione_storica,
         "punti_di_forza": punti_forza,
         "criticita_osservatorio": criticita_osservatorio,
-        "score_affidabilita": f"{feasibility_score}%",
+        "score_affidabilita": f"{truth_score_avg}%",
         "statistiche_atti": {
             "totale_atti": total_props,
             "verificati": verified_count,
@@ -590,7 +610,7 @@ def update_all_party_dossiers(db: Session):
             party.dossier_ai = json.dumps(dossier_data, ensure_ascii=False)
 
             proposals = db.query(PoliticalProposal).filter(
-                (PoliticalProposal.party_id == party.id) | (PoliticalProposal.partito.ilike(f"%{party.name}%"))
+                (PoliticalProposal.party_id == party.id) | (PoliticalProposal.partito == party.name)
             ).all()
             if proposals:
                 party.truthfulness_score = round(sum(calculate_proposal_truthfulness_score(p.fact_check_status, getattr(p, "truth_score", None)) for p in proposals) / len(proposals), 1)

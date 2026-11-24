@@ -64,9 +64,7 @@ def find_matching_existing_proposal(
       and the statement or costs have evolved, returns None so a NEW evolutionary proposal is inserted,
       preserving the historical trajectory across time.
     """
-    query = db.query(PoliticalProposal).filter(
-        (PoliticalProposal.macro_argomento == macro_argomento)
-    )
+    query = db.query(PoliticalProposal)
     if party_id:
         query = query.filter((PoliticalProposal.party_id == party_id) | (PoliticalProposal.partito == partito))
     else:
@@ -84,7 +82,7 @@ def find_matching_existing_proposal(
                 cand_emb = json.loads(cand.embedding)
             except Exception:
                 pass
-                
+
         is_dup, reason = is_duplicate_proposal(
             party_a=partito,
             topic_a=macro_argomento,
@@ -96,6 +94,16 @@ def find_matching_existing_proposal(
             emb_b=cand_emb
         )
         if is_dup:
+            # Preserve chronological evolution across different legislative years ONLY when statement genuinely evolved
+            from difflib import SequenceMatcher
+            stmt_sim = SequenceMatcher(None, dichiarazione_sintesi.strip().lower(), (cand.dichiarazione_sintesi or "").strip().lower()).ratio()
+            if (
+                new_timestamp and cand.timestamp and
+                cand.timestamp.year != new_timestamp.year and
+                abs((new_timestamp - cand.timestamp).days) > 180 and
+                stmt_sim < 0.65
+            ):
+                continue
             print(f"[PolicyMerger] Duplicate detected ({reason}): linking to existing id={cand.id}")
             return cand
 

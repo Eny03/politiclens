@@ -79,5 +79,65 @@ BENCHMARKS_SEED = [
         "anno_riferimento": 2024,
         "descrizione": "Media UE 4.7% del PIL. Italia al di sotto della media europea di circa 1 punto percentuale.",
         "url_fonte": "https://ec.europa.eu/eurostat/statistics-explained/index.php?title=Educational_expenditure_statistics"
+    },
+    {
+        "categoria": "Previdenza",
+        "indicatore": "Spesa Pensionistica / PIL",
+        "valore": 15.8,
+        "unita": "% PIL",
+        "fonte_istituzionale": "INPS / Ragioneria Generale dello Stato",
+        "anno_riferimento": 2025,
+        "descrizione": "Incidenza della spesa previdenziale sul PIL (~335 Mld €/anno). Riferimento chiave per la sostenibilità di Quota 41 e pensioni minime.",
+        "url_fonte": "https://www.rgs.mef.gov.it/VERSIONE-I/attivita_istituzionali/monitoraggio/spesa_pensionistica/"
+    },
+    {
+        "categoria": "Fisco & Entrate",
+        "indicatore": "Pressione Fiscale Complessiva",
+        "valore": 42.5,
+        "unita": "% PIL",
+        "fonte_istituzionale": "ISTAT",
+        "anno_riferimento": 2025,
+        "descrizione": "Rapporto tra entrate fiscali/contributive e PIL nominale. Smentisce stime iperboliche fuori scala.",
+        "url_fonte": "https://www.istat.it/it/archivio/conti-economici"
+    },
+    {
+        "categoria": "Fisco & Entrate",
+        "indicatore": "Tax Gap / Evasione Fiscale Stimata",
+        "valore": 82.4,
+        "unita": "Miliardi €",
+        "fonte_istituzionale": "MEF - Relazione sull'Economia non Osservata",
+        "anno_riferimento": 2024,
+        "descrizione": "Mancato gettito tributario e contributivo annuo. L'UPB esclude l'uso di stime teoriche di recupero come copertura fissa ex art. 81 Cost.",
+        "url_fonte": "https://www.finanze.gov.it/it/statistiche/"
+    },
+    {
+        "categoria": "Difesa & Esteri",
+        "indicatore": "Spesa per la Difesa / PIL (Target NATO 2%)",
+        "valore": 1.54,
+        "unita": "% PIL",
+        "fonte_istituzionale": "NATO / Ministero della Difesa",
+        "anno_riferimento": 2025,
+        "descrizione": "Spesa difesa attuale (~32.5 Mld €). Raggiungere il target NATO del 2% PIL richiede circa 10-12 miliardi € aggiuntivi l'anno.",
+        "url_fonte": "https://www.nato.int/cps/en/natohq/topics_49198.htm"
+    },
+    {
+        "categoria": "Finanza Pubblica",
+        "indicatore": "Capienza Ordinaria Legge di Bilancio",
+        "valore": 28.0,
+        "unita": "Miliardi € / anno",
+        "fonte_istituzionale": "MEF / Ufficio Parlamentare di Bilancio",
+        "anno_riferimento": 2025,
+        "descrizione": "Ordine di grandezza tipico della manovra finanziaria annuale sotto i vincoli del nuovo Patto di Stabilità UE.",
+        "url_fonte": "https://www.upbilancio.it"
+    },
+    {
+        "categoria": "Lavoro",
+        "indicatore": "Tasso di Occupazione (15-64 anni)",
+        "valore": 62.4,
+        "unita": "% Forza Lavoro",
+        "fonte_istituzionale": "ISTAT",
+        "anno_riferimento": 2025,
+        "descrizione": "Livello record storico in Italia, ma inferiore alla media UE (~70.5%), con divario marcato nel Mezzogiorno e nell'occupazione femminile.",
+        "url_fonte": "https://www.istat.it/it/lavoro-e-retribuzioni"
     }
 ]

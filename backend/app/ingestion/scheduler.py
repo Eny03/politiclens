@@ -13,7 +13,7 @@ from app.ai.extractor import extract_proposals_from_text, NON_POLICY_PATTERNS
 from app.ai.embeddings import get_text_embedding
 from app.ai.proposal_validator import sanitize_and_validate_proposal_statement
 from app.ai.policy_merger import find_matching_existing_proposal, merge_or_update_policy_proposal
-from app.ai.fact_checker import calculate_proposal_truthfulness_score
+from app.ai.fact_checker import calculate_proposal_truthfulness_score, analyze_feasibility_and_factcheck
 from app.ai.fiscal_calculator import calculate_fiscal_impact_and_coverage
 
 # FIX ARCH-03 + BUG-05: use AsyncIOScheduler instead of BackgroundScheduler to avoid
@@ -126,21 +126,30 @@ async def run_pipeline_scan():
                     )
                     db.add(audit_entry)
                 else:
+                    if db.query(PoliticalProposal).filter(PoliticalProposal.content_hash == item_hash).first():
+                        continue
                     dt = datetime.datetime.fromisoformat(item.timestamp) if item.timestamp else art["published_at"]
-                    # FIX BUG-04: import moved to top-level
-                    init_truth_score = calculate_proposal_truthfulness_score(item.fact_check.status)
+                    feas, fc_st, fc_mot, fc_src, init_truth_score = analyze_feasibility_and_factcheck(
+                        partito=party_obj.name,
+                        macro_argomento=item.macro_argomento,
+                        sintesi=item.dichiarazione_sintesi,
+                        costo_stimato=item.impatto_economico.costo_stimato,
+                        coperture=item.impatto_economico.coperture_dichiarate,
+                        raw_text=raw_text,
+                        tipo_azione=item.tipo_azione
+                    )
                     proposal_record = PoliticalProposal(
                         party_id=party_id,
-                        partito=item.partito,
+                        partito=party_obj.name,
                         macro_argomento=item.macro_argomento,
                         dichiarazione_sintesi=item.dichiarazione_sintesi,
                         tipo_azione=item.tipo_azione,
                         costo_stimato=item.impatto_economico.costo_stimato,
                         coperture_dichiarate=item.impatto_economico.coperture_dichiarate,
-                        fattibilita_finanziaria=item.impatto_economico.fattibilita_finanziaria,
-                        fact_check_status=item.fact_check.status,
-                        fact_check_motivazione=item.fact_check.motivazione_oggettiva,
-                        fact_check_fonte=item.fact_check.fonte_verifica,
+                        fattibilita_finanziaria=item.impatto_economico.fattibilita_finanziaria or feas,
+                        fact_check_status=fc_st,
+                        fact_check_motivazione=fc_mot,
+                        fact_check_fonte=fc_src,
                         truth_score=init_truth_score,
                         fonte_url=item.fonte_url or art["url"],
                         fonte_titolo=art["title"],
@@ -152,16 +161,15 @@ async def run_pipeline_scan():
                     )
                     db.add(proposal_record)
                     db.flush()
-                    # Audit log: aggiunta a programma o idea
                     audit_entry = AuditLog(
                         event_type="aggiunta",
                         entity_type="programma",
                         entity_id=str(proposal_record.id),
-                        entity_name=f"{item.partito}: {item.macro_argomento}",
+                        entity_name=f"{party_obj.name}: {item.macro_argomento}",
                         old_value=None,
                         new_value=item.dichiarazione_sintesi[:90] + "..." if len(item.dichiarazione_sintesi) > 90 else item.dichiarazione_sintesi,
                         agent_responsible="PolicyDistillerAgent",
-                        details=f"Aggiunta nuova proposta per {item.partito} su {item.macro_argomento}: '{item.dichiarazione_sintesi}'. Fonte: {art.get('source_name', 'Web')}.",
+                        details=f"Aggiunta nuova proposta per {party_obj.name} su {item.macro_argomento}: '{item.dichiarazione_sintesi}'. Fonte: {art.get('source_name', 'Web')}.",
                         timestamp=datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
                     )
                     db.add(audit_entry)
@@ -197,11 +205,14 @@ async def run_pipeline_scan():
             except Exception as ce:
                 print(f"[Scheduler] Multi-AI Consensus notice: {ce}")
 
-        # Step 2c: Guaranteed Continuous Policy Audit & Refinement (Always updates/refines every 10 min)
+        # Step 2c: Safe Data-Consistency Audit (only repairs proposals missing fiscal/fact-check data; NEVER mutates historical timestamps!)
         if total_proposals == 0:
             try:
-                from app.ai.fiscal_calculator import calculate_fiscal_impact_and_coverage
-                candidate = db.query(PoliticalProposal).order_by(PoliticalProposal.timestamp.asc()).first()
+                candidate = db.query(PoliticalProposal).filter(
+                    (PoliticalProposal.truth_score.is_(None)) |
+                    (PoliticalProposal.coperture_dichiarate.ilike("%non specificat%")) |
+                    (PoliticalProposal.costo_stimato.ilike("%non quantificat%"))
+                ).first()
                 if candidate:
                     old_sintesi = candidate.dichiarazione_sintesi
                     audit_res = calculate_fiscal_impact_and_coverage(
@@ -211,12 +222,23 @@ async def run_pipeline_scan():
                         costo_stimato=candidate.costo_stimato,
                         coperture_dichiarate=candidate.coperture_dichiarate
                     )
+                    candidate.costo_stimato = audit_res["costo_stimato"]
+                    candidate.coperture_dichiarate = audit_res["coperture_dichiarate"]
                     candidate.fattibilita_finanziaria = audit_res["fattibilita_finanziaria"]
-                    candidate.fact_check_status = audit_res["fact_check_status"]
-                    candidate.fact_check_motivazione = audit_res["fact_check_motivazione"]
-                    candidate.truth_score = calculate_proposal_truthfulness_score(candidate.fact_check_status)
-                    candidate.timestamp = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
-                    
+                    _, fc_st, fc_mot, fc_src, t_score = analyze_feasibility_and_factcheck(
+                        partito=candidate.partito,
+                        macro_argomento=candidate.macro_argomento,
+                        sintesi=candidate.dichiarazione_sintesi,
+                        costo_stimato=candidate.costo_stimato,
+                        coperture=candidate.coperture_dichiarate,
+                        raw_text=candidate.raw_text or "",
+                        tipo_azione=candidate.tipo_azione or ""
+                    )
+                    candidate.fact_check_status = fc_st
+                    candidate.fact_check_motivazione = fc_mot
+                    candidate.fact_check_fonte = fc_src
+                    candidate.truth_score = t_score
+
                     audit_entry = AuditLog(
                         event_type="modifica",
                         entity_type="programma",
@@ -225,18 +247,16 @@ async def run_pipeline_scan():
                         old_value=old_sintesi[:90] + "..." if len(old_sintesi) > 90 else old_sintesi,
                         new_value=candidate.dichiarazione_sintesi[:90] + "..." if len(candidate.dichiarazione_sintesi) > 90 else candidate.dichiarazione_sintesi,
                         agent_responsible="FiscalAuditorAgent",
-                        details=f"Revisione e audit di fattibilità finanziaria (MEF/UPB) su {candidate.macro_argomento}: '{candidate.dichiarazione_sintesi}'. Parametro: {audit_res['fattibilita_finanziaria'][:75]}.",
+                        details=f"Integrazione coperture e verifica fattuale su {candidate.macro_argomento}: '{candidate.dichiarazione_sintesi}'.",
                         timestamp=datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
                     )
                     db.add(audit_entry)
                     total_proposals += 1
-                    gap_info_msg += f" • Revisione e audit di conformità finanziaria per {candidate.partito} ({candidate.macro_argomento})"
-                    print(f"[Scheduler] Continuous Audit: perfezionata e aggiornata proposta #{candidate.id} ({candidate.partito})")
+                    gap_info_msg += f" • Integrata copertura finanziaria per {candidate.partito} ({candidate.macro_argomento})"
             except Exception as fe:
                 print(f"[Scheduler] Fiscal audit cycle notice: {fe}")
 
         # Step 2d: Quality Gatekeeper Auto-Audit (scans and purges non-policy slogans, media brands and headline snippets)
-        # FIX AI-07: run gatekeeper only when new/modified proposals were detected in this ingestion cycle
         if total_proposals > 0:
             try:
                 from app.ai.proposal_validator import purge_and_audit_invalid_proposals
@@ -247,7 +267,6 @@ async def run_pipeline_scan():
                 print(f"[Scheduler] Gatekeeper auto-audit notice: {qe}")
 
         # Step 3: Autonomously synthesize and update AI Dossiers for all political parties
-        # FIX AI-08: regenerate dossiers only when proposals changed during this cycle
         if total_proposals > 0:
             try:
                 from app.ingestion.dossier_generator import update_all_party_dossiers
@@ -255,7 +274,7 @@ async def run_pipeline_scan():
             except Exception as de:
                 print(f"[Scheduler] AI Dossier generation warning: {de}")
 
-        # Record Ingestion Log
+        # Record Ingestion Log (poll refresh runs in its own dedicated scheduled job without duplication)
         log_entry = IngestionLog(
             source_name="AI Universal Web Crawler & Monitor",
             source_url="Scansione Web Nazionale & Ricerca Mirata Lacune",
@@ -265,13 +284,6 @@ async def run_pipeline_scan():
             log_message=f"Scansione completata: {total_articles} articoli analizzati dal web, {total_proposals} posizioni formalizzate censite/aggiornate{gap_info_msg}."
         )
         db.add(log_entry)
-
-        # Refresh demographic polling distribution & log audit entries
-        try:
-            from app.ingestion.poll_tracker import run_poll_tracker_pipeline
-            run_poll_tracker_pipeline(db)
-        except Exception as pe:
-            print(f"[Scheduler] Poll tracker refresh notice: {pe}")
 
         db.commit()
         print(f"[Scheduler] Pipeline completed: {total_articles} articles, {total_proposals} proposals processed{gap_info_msg}.")

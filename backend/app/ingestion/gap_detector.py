@@ -8,7 +8,7 @@ from app.models import PoliticalParty, PoliticalProposal, IngestionLog, AuditLog
 from app.ai.proposal_validator import sanitize_and_validate_proposal_statement, strip_media_source_suffix
 from app.ingestion.sources_config import PARTY_ALIASES
 from app.ingestion.universal_web_search import search_web_news, search_duckduckgo_open_web
-from app.ingestion.text_extractor import compute_content_hash, clean_html
+from app.ingestion.text_extractor import compute_content_hash, clean_html, _match_term
 from app.ai.extractor import extract_proposals_from_text
 from app.ai.embeddings import get_text_embedding
 from app.ai.fact_checker import analyze_feasibility_and_factcheck
@@ -216,7 +216,7 @@ def _extract_gap_policy_commitment(text: str, party_name: str, topic: str, title
     full_corpus = f"{title or ''} {text}".lower()
     
     # 0. Party Attribution Gate: party must be explicitly mentioned in the text or headline
-    has_party = any(re.search(r"\b" + re.escape(a) + r"\b", full_corpus) for a in party_aliases)
+    has_party = any(_match_term(a, full_corpus) for a in party_aliases)
     if not has_party:
         return None
 
@@ -232,7 +232,7 @@ def _extract_gap_policy_commitment(text: str, party_name: str, topic: str, title
             if quote_m:
                 # Ensure the party was mentioned BEFORE the quote in the headline!
                 prefix_headline = t_low[:quote_m.start()]
-                if any(re.search(r"\b" + re.escape(a) + r"\b", prefix_headline) for a in party_aliases):
+                if any(_match_term(a, prefix_headline) for a in party_aliases):
                     q_text = quote_m.group(1).strip()
                     valid_q = sanitize_and_validate_proposal_statement(q_text)
                     if valid_q:
@@ -269,7 +269,7 @@ def _extract_gap_policy_commitment(text: str, party_name: str, topic: str, title
             context = sentences[idx - 1].lower() + " " + context
         if idx + 1 < len(sentences):
             context = context + " " + sentences[idx + 1].lower()
-        if not any(re.search(r"\b" + re.escape(a) + r"\b", context) for a in party_aliases):
+        if not any(_match_term(a, context) for a in party_aliases):
             continue
 
         for pat in commitment_patterns:
@@ -384,11 +384,17 @@ async def autonomous_targeted_gap_search(db: Session, max_gaps: int = 6) -> Dict
                     )
                     comm["costo"] = f_calc["costo_stimato"]
                     comm["coperture"] = f_calc["coperture_dichiarate"]
-                    feasibility = f_calc["fattibilita_finanziaria"]
-                    status = f_calc["fact_check_status"]
-                    motivazione = f_calc["fact_check_motivazione"]
-                    fonte_verif = f_calc["fact_check_fonte"]
-                    
+                    feas_fc, status, motivazione, fonte_verif, truth_sc = analyze_feasibility_and_factcheck(
+                        partito=p_name,
+                        macro_argomento=topic,
+                        sintesi=comm["sintesi"],
+                        costo_stimato=comm["costo"],
+                        coperture=comm["coperture"],
+                        raw_text=raw_text,
+                        tipo_azione=comm["tipo_azione"]
+                    )
+                    feasibility = f_calc["fattibilita_finanziaria"] or feas_fc
+
                     text_to_embed = f"{p_name} {topic} {comm['sintesi']}"
                     emb_list = await get_text_embedding(text_to_embed)
                     emb_json = json.dumps(emb_list) if emb_list else None
@@ -400,7 +406,8 @@ async def autonomous_targeted_gap_search(db: Session, max_gaps: int = 6) -> Dict
                         partito=p_name,
                         macro_argomento=topic,
                         dichiarazione_sintesi=comm["sintesi"],
-                        emb_list=emb_list
+                        emb_list=emb_list,
+                        new_timestamp=art.get("published_at")
                     )
                     if matching_comm:
                         old_s = matching_comm.dichiarazione_sintesi
@@ -409,6 +416,9 @@ async def autonomous_targeted_gap_search(db: Session, max_gaps: int = 6) -> Dict
                         matching_comm.coperture_dichiarate = comm["coperture"]
                         matching_comm.fattibilita_finanziaria = feasibility
                         matching_comm.fact_check_status = status
+                        matching_comm.fact_check_motivazione = motivazione
+                        matching_comm.fact_check_fonte = fonte_verif
+                        matching_comm.truth_score = truth_sc
                         matching_comm.timestamp = art.get("published_at", datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None))
                         db.add(AuditLog(
                             event_type="modifica",
@@ -425,7 +435,8 @@ async def autonomous_targeted_gap_search(db: Session, max_gaps: int = 6) -> Dict
                         proposals_added_for_topic += 1
                         continue
 
-                    from app.ai.fact_checker import calculate_proposal_truthfulness_score
+                    if db.query(PoliticalProposal).filter(PoliticalProposal.content_hash == item_hash).first():
+                        continue
                     record = PoliticalProposal(
                         party_id=party_id,
                         partito=p_name,
@@ -438,7 +449,7 @@ async def autonomous_targeted_gap_search(db: Session, max_gaps: int = 6) -> Dict
                         fact_check_status=status,
                         fact_check_motivazione=motivazione,
                         fact_check_fonte=fonte_verif,
-                        truth_score=calculate_proposal_truthfulness_score(status),
+                        truth_score=truth_sc,
                         fonte_url=art["url"],
                         fonte_titolo=art["title"] or f"Presa di posizione {p_name} su {topic}",
                         fonte_testata=art.get("source_name", "Ricerca Mirata Web"),
@@ -512,23 +523,33 @@ async def autonomous_targeted_gap_search(db: Session, max_gaps: int = 6) -> Dict
                             timestamp=datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
                         ))
                         total_added_or_updated += 1
-                        gap_filled_for_this_topic = True
+                        proposals_added_for_topic += 1
                     else:
+                        if db.query(PoliticalProposal).filter(PoliticalProposal.content_hash == item_hash).first():
+                            continue
                         dt = datetime.datetime.fromisoformat(item.timestamp) if item.timestamp else art["published_at"]
-                        from app.ai.fact_checker import calculate_proposal_truthfulness_score
+                        _, fc_st, fc_mot, fc_src, t_sc = analyze_feasibility_and_factcheck(
+                            partito=p_name,
+                            macro_argomento=item.macro_argomento,
+                            sintesi=item.dichiarazione_sintesi,
+                            costo_stimato=item.impatto_economico.costo_stimato,
+                            coperture=item.impatto_economico.coperture_dichiarate,
+                            raw_text=raw_text,
+                            tipo_azione=item.tipo_azione
+                        )
                         new_prop = PoliticalProposal(
                             party_id=party_id,
-                            partito=item.partito,
+                            partito=p_name,
                             macro_argomento=item.macro_argomento,
                             dichiarazione_sintesi=item.dichiarazione_sintesi,
                             tipo_azione=item.tipo_azione,
                             costo_stimato=item.impatto_economico.costo_stimato,
                             coperture_dichiarate=item.impatto_economico.coperture_dichiarate,
                             fattibilita_finanziaria=item.impatto_economico.fattibilita_finanziaria,
-                            fact_check_status=item.fact_check.status,
-                            fact_check_motivazione=item.fact_check.motivazione_oggettiva,
-                            fact_check_fonte=item.fact_check.fonte_verifica,
-                            truth_score=calculate_proposal_truthfulness_score(item.fact_check.status),
+                            fact_check_status=fc_st,
+                            fact_check_motivazione=fc_mot,
+                            fact_check_fonte=fc_src,
+                            truth_score=t_sc,
                             fonte_url=item.fonte_url or art["url"],
                             fonte_titolo=art["title"],
                             fonte_testata=art["source_name"],

@@ -1,13 +1,9 @@
 import datetime
-import socket
 from typing import List, Dict, Any
 import feedparser
 from dateutil import parser as date_parser
 from app.ingestion.sources_config import MONITORED_FEEDS
 from app.ingestion.text_extractor import detect_entities, clean_html
-
-# Set global fast network timeout for feed fetching
-socket.setdefaulttimeout(4)
 
 def parse_entry_datetime(entry: Any) -> datetime.datetime:
     """Parses entry publication timestamp with fallbacks."""

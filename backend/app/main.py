@@ -8,6 +8,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -107,26 +108,54 @@ def seed_database_if_empty():
                     curr.dossier_ai = p_data["dossier_ai"]
         db.commit()
 
-        # Seed Benchmarks
-        if db.query(InstitutionalBenchmark).count() == 0:
-            print("[Database] Seeding institutional benchmarks...")
-            for b_data in BENCHMARKS_SEED:
-                benchmark = InstitutionalBenchmark(**b_data)
-                db.add(benchmark)
+        # Seed / Sync Benchmarks incrementally by indicatore (adds any newly introduced benchmarks)
+        existing_bench_names = {b.indicatore for b in db.query(InstitutionalBenchmark).all()}
+        added_bench = 0
+        for b_data in BENCHMARKS_SEED:
+            if b_data["indicatore"] not in existing_bench_names:
+                db.add(InstitutionalBenchmark(**b_data))
+                existing_bench_names.add(b_data["indicatore"])
+                added_bench += 1
+        if added_bench > 0:
             db.commit()
+            print(f"[Database] Seeded {added_bench} new institutional benchmarks (total {len(existing_bench_names)}).")
 
         # Non-destructive Proposal Persistence with Intelligent Deduplication
         parties_map = {p.name: p.id for p in db.query(PoliticalParty).all()}
         from app.ai.embeddings import _local_deterministic_embedding
+        from app.ai.extractor import normalize_macro_topic
         from difflib import SequenceMatcher
 
-        stopwords = {'e', 'il', 'la', 'i', 'gli', 'le', 'di', 'a', 'da', 'in', 'con', 'su', 'per', 'tra', 'fra', 'del', 'della', 'dei', 'delle', 'un', 'una', 'uno', 'al', 'alla', 'ai', 'alle'}
+        def _parse_ts_year(ts_obj) -> int:
+            if isinstance(ts_obj, datetime.datetime):
+                return ts_obj.year
+            if isinstance(ts_obj, str) and len(ts_obj) >= 4 and ts_obj[:4].isdigit():
+                return int(ts_obj[:4])
+            return datetime.datetime.now(datetime.timezone.utc).year
 
-        # Deduplicate all seed proposals before inserting (strict substantive matching)
+        def _is_historical_evolution_pair(ts_a, ts_b, text_a: str, text_b: str) -> bool:
+            yr_a, yr_b = _parse_ts_year(ts_a), _parse_ts_year(ts_b)
+            if abs(yr_a - yr_b) >= 1:
+                ratio = SequenceMatcher(None, (text_a or "").lower(), (text_b or "").lower()).ratio()
+                if ratio < 0.85:
+                    return True
+            return False
+
+        # Deduplicate all seed proposals before inserting (strict substantive matching, preserving multi-year evolution)
         deduped_seeds = []
-        for prop in (PROPOSALS_SEED + HISTORICAL_PROPOSALS_SEED):
+        for raw_prop in (PROPOSALS_SEED + HISTORICAL_PROPOSALS_SEED):
+            prop = dict(raw_prop)
+            prop["macro_argomento"] = normalize_macro_topic(
+                prop.get("macro_argomento", "Istituzioni"),
+                prop.get("dichiarazione_sintesi", "")
+            )
             is_dup = False
             for existing_idx, existing_seed in enumerate(deduped_seeds):
+                if _is_historical_evolution_pair(
+                    prop.get("timestamp"), existing_seed.get("timestamp"),
+                    prop["dichiarazione_sintesi"], existing_seed["dichiarazione_sintesi"]
+                ):
+                    continue
                 dup_matched, reason = is_duplicate_proposal(
                     party_a=prop["partito"],
                     topic_a=prop["macro_argomento"],
@@ -144,57 +173,94 @@ def seed_database_if_empty():
             if not is_dup:
                 deduped_seeds.append(prop)
 
-        # Seed missing clean proposals
+        # Normalize existing DB topics before checking against seeds
         existing_proposals = db.query(PoliticalProposal).all()
+        topic_fixed = False
+        for ep in existing_proposals:
+            canon_t = normalize_macro_topic(ep.macro_argomento, ep.dichiarazione_sintesi)
+            if canon_t != ep.macro_argomento:
+                ep.macro_argomento = canon_t
+                topic_fixed = True
+        if topic_fixed:
+            db.commit()
+
         existing_signatures = {
             (p.partito.strip(), p.macro_argomento.strip(), p.dichiarazione_sintesi.strip().lower()[:35])
             for p in existing_proposals
         }
         existing_hashes = {p.content_hash for p in existing_proposals if p.content_hash}
+        existing_by_party = {}
+        for p in existing_proposals:
+            existing_by_party.setdefault(p.partito.strip().lower(), []).append(p)
 
         added_count = 0
         for prop in deduped_seeds:
             sig = (prop["partito"].strip(), prop["macro_argomento"].strip(), prop["dichiarazione_sintesi"].strip().lower()[:35])
             hash_key = compute_content_hash(f"{prop['partito']}_{prop['macro_argomento']}_{prop['dichiarazione_sintesi']}")
-            
-            if sig not in existing_signatures and hash_key not in existing_hashes:
-                party_id = parties_map.get(prop["partito"])
-                emb_list = _local_deterministic_embedding(f"{prop['partito']} {prop['macro_argomento']} {prop['dichiarazione_sintesi']}")
-                
-                ts_val = prop.get("timestamp")
-                if isinstance(ts_val, str):
-                    try:
-                        ts_val = datetime.datetime.fromisoformat(ts_val)
-                    except Exception:
-                        ts_val = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
-                elif not isinstance(ts_val, datetime.datetime):
-                    ts_val = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
 
-                record = PoliticalProposal(
-                    party_id=party_id,
-                    partito=prop["partito"],
-                    macro_argomento=prop["macro_argomento"],
-                    dichiarazione_sintesi=prop["dichiarazione_sintesi"],
-                    tipo_azione=prop.get("tipo_azione", "Dichiarazione programmatica"),
-                    costo_stimato=prop.get("costo_stimato", "Non quantificato"),
-                    coperture_dichiarate=prop.get("coperture_dichiarate", "Non specificate"),
-                    fattibilita_finanziaria=prop.get("fattibilita_finanziaria"),
-                    fact_check_status=prop.get("fact_check_status", "In attesa di copertura"),
-                    fact_check_motivazione=prop.get("fact_check_motivazione"),
-                    fact_check_fonte=prop.get("fact_check_fonte"),
-                    truth_score=prop.get("truth_score", 75.0),
-                    fonte_url=prop.get("fonte_url", ""),
-                    fonte_titolo=prop.get("fonte_titolo"),
-                    fonte_testata=prop.get("fonte_testata"),
-                    raw_text=prop.get("raw_text") or f"{prop['dichiarazione_sintesi']}. Posizione politica formalizzata da {prop['partito']} in materia di {prop['macro_argomento']}.",
-                    content_hash=hash_key,
-                    embedding=json.dumps(emb_list) if emb_list else None,
-                    timestamp=ts_val
+            if sig in existing_signatures or hash_key in existing_hashes:
+                continue
+
+            # Also check semantic/lexical duplicate against existing DB proposals for the same party
+            already_covered = False
+            for ep in existing_by_party.get(prop["partito"].strip().lower(), []):
+                if _is_historical_evolution_pair(
+                    prop.get("timestamp"), ep.timestamp,
+                    prop["dichiarazione_sintesi"], ep.dichiarazione_sintesi
+                ):
+                    continue
+                dup_matched, _ = is_duplicate_proposal(
+                    party_a=prop["partito"],
+                    topic_a=prop["macro_argomento"],
+                    text_a=prop["dichiarazione_sintesi"],
+                    party_b=ep.partito,
+                    topic_b=ep.macro_argomento,
+                    text_b=ep.dichiarazione_sintesi
                 )
-                db.add(record)
-                existing_signatures.add(sig)
-                existing_hashes.add(hash_key)
-                added_count += 1
+                if dup_matched:
+                    already_covered = True
+                    break
+            if already_covered:
+                continue
+
+            party_id = parties_map.get(prop["partito"])
+            emb_list = _local_deterministic_embedding(f"{prop['partito']} {prop['macro_argomento']} {prop['dichiarazione_sintesi']}")
+
+            ts_val = prop.get("timestamp")
+            if isinstance(ts_val, str):
+                try:
+                    ts_val = datetime.datetime.fromisoformat(ts_val)
+                except Exception:
+                    ts_val = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+            elif not isinstance(ts_val, datetime.datetime):
+                ts_val = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+
+            record = PoliticalProposal(
+                party_id=party_id,
+                partito=prop["partito"],
+                macro_argomento=prop["macro_argomento"],
+                dichiarazione_sintesi=prop["dichiarazione_sintesi"],
+                tipo_azione=prop.get("tipo_azione", "Dichiarazione programmatica"),
+                costo_stimato=prop.get("costo_stimato", "Non quantificato"),
+                coperture_dichiarate=prop.get("coperture_dichiarate", "Non specificate"),
+                fattibilita_finanziaria=prop.get("fattibilita_finanziaria"),
+                fact_check_status=prop.get("fact_check_status", "In attesa di copertura"),
+                fact_check_motivazione=prop.get("fact_check_motivazione"),
+                fact_check_fonte=prop.get("fact_check_fonte"),
+                truth_score=prop.get("truth_score", 75.0),
+                fonte_url=prop.get("fonte_url", ""),
+                fonte_titolo=prop.get("fonte_titolo"),
+                fonte_testata=prop.get("fonte_testata"),
+                raw_text=prop.get("raw_text") or f"{prop['dichiarazione_sintesi']}. Posizione politica formalizzata da {prop['partito']} in materia di {prop['macro_argomento']}.",
+                content_hash=hash_key,
+                embedding=json.dumps(emb_list) if emb_list else None,
+                timestamp=ts_val
+            )
+            db.add(record)
+            existing_signatures.add(sig)
+            existing_hashes.add(hash_key)
+            existing_by_party.setdefault(prop["partito"].strip().lower(), []).append(record)
+            added_count += 1
 
         if added_count > 0:
             db.commit()
@@ -205,12 +271,17 @@ def seed_database_if_empty():
         by_grp = {}
         db_to_delete = []
         for p in existing_db_props:
-            grp_key = (p.partito.strip().lower(), p.macro_argomento.strip().lower())
+            grp_key = p.partito.strip().lower()
             if grp_key not in by_grp:
                 by_grp[grp_key] = [p]
             else:
                 dup_found = False
                 for prev_p in by_grp[grp_key]:
+                    if _is_historical_evolution_pair(
+                        p.timestamp, prev_p.timestamp,
+                        p.dichiarazione_sintesi, prev_p.dichiarazione_sintesi
+                    ):
+                        continue
                     p_emb = json.loads(p.embedding) if p.embedding else None
                     prev_emb = json.loads(prev_p.embedding) if prev_p.embedding else None
                     dup_matched, reason = is_duplicate_proposal(
@@ -338,12 +409,12 @@ def seed_database_if_empty():
                     p.dichiarazione_sintesi = "Contrarietà a qualsiasi legalizzazione delle droghe leggere, potenziamento delle comunità di recupero e tutela della vita dal concepimento alla morte naturale"
                     p.tipo_azione = "Dichiarazione programmatica"
                     p.fact_check_status = "Verificato"
-                    p.fact_check_motivazione = "Posizione ufficiale e programma di governo di Fratelli d'Italia a contrasto delle dipendenze e tutela della vita."
+                    p.fact_check_motivazione = f"Posizione ufficiale e programma politico di {p.partito} a contrasto delle dipendenze e tutela della vita."
             if "i programmi dei principali partiti su tasse" in p_text or "forbes" in p_text:
                 db.delete(p)
             if p.partito == "Potere al Popolo" and p.macro_argomento == "Lavoro" and "9 euro" in p_text:
                 p.dichiarazione_sintesi = "Salario minimo legale a 10 euro lordi l'ora indicizzato all'inflazione reale con ripristino della scala mobile"
-            if p.partito == "Forza Italia" and p.macro_argomento == "Istituzioni" and any(k in p_text for k in ["legittima difesa", "separazione delle carriere"]):
+            if p.partito == "Forza Italia" and p.macro_argomento == "Istituzioni" and "legittima difesa" in p_text:
                 p.dichiarazione_sintesi = "Tutela del garantismo penale, riforma della carcerazione preventiva e abolizione del reato di abuso d'ufficio"
             if p.partito == "Fratelli d'Italia" and p.macro_argomento == "Diritti Civili" and "separazione delle carriere" in p_text:
                 p.dichiarazione_sintesi = "Tutela della famiglia e della natalità con quoziente familiare, potenziamento degli asili nido e contrasto alla maternità surrogata"
@@ -406,24 +477,29 @@ def seed_database_if_empty():
             PoliticalProposal.macro_argomento == "Sanità"
         ).first()
         if not ora_sanita:
-            ora_party = db.query(PoliticalProposal).filter(PoliticalProposal.partito == "ORA!").first()
-            p_id = ora_party.party_id if ora_party else None
+            ora_party = db.query(PoliticalParty).filter(PoliticalParty.name == "ORA!").first()
+            p_id = ora_party.id if ora_party else None
+            ora_sintesi = "Sanità di prossimità con convenzioni trasparenti e voucher universali per l'abbattimento immediato delle liste d'attesa"
+            ora_hash = compute_content_hash(f"ORA!_Sanità_{ora_sintesi}")
+            ora_emb = _local_deterministic_embedding(f"ORA! Sanità {ora_sintesi}")
             new_ora = PoliticalProposal(
                 party_id=p_id,
                 partito="ORA!",
                 macro_argomento="Sanità",
-                dichiarazione_sintesi="Sanità di prossimità con convenzioni trasparenti e voucher universali per l'abbattimento immediato delle liste d'attesa",
+                dichiarazione_sintesi=ora_sintesi,
                 tipo_azione="Proposta di legge",
-                costo_stimato="Non quantificato",
+                costo_stimato="Invarianza di spesa a parità di budget SSN (riallocazione verso voucher concorrenziali)",
                 coperture_dichiarate="Riorganizzazione delle convenzioni regionali e fondi ordinari SSN",
                 fattibilita_finanziaria="Compatibile con i saldi di bilancio sanitario a parità di spesa pro-capite.",
-                fact_check_status="In attesa di copertura",
+                fact_check_status="Parzialmente verificato",
                 fact_check_motivazione="Proposta programmatica di ORA! per l'efficientamento del servizio sanitario e la riduzione dei tempi d'attesa.",
                 fact_check_fonte="Programma Politico ORA! - Sezione Sanità e Servizi",
-                truth_score=75.0,
+                truth_score=80.0,
                 fonte_url="https://movimento-ora.it",
                 fonte_titolo="Programma Sanità e Liste d'Attesa",
                 fonte_testata="ORA! Ufficio Studi",
+                content_hash=ora_hash,
+                embedding=json.dumps(ora_emb) if ora_emb else None,
                 timestamp=datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
             )
             db.add(new_ora)
@@ -452,7 +528,14 @@ def seed_database_if_empty():
                 "delibera", "l.", "d.l.", "d.lgs.", "l. 86/2024", "l. 159/2024", "l. 14/2024"
             ]
 
+            from app.ai.fact_checker import analyze_feasibility_and_factcheck, calculate_proposal_truthfulness_score
+            from app.ai.fiscal_calculator import calculate_fiscal_impact_and_coverage, calculate_financial_coverage_percentage
+
             for p in all_db_props:
+                canon_t = normalize_macro_topic(p.macro_argomento, p.dichiarazione_sintesi)
+                if canon_t != p.macro_argomento:
+                    p.macro_argomento = canon_t
+
                 clean_t = sanitize_proposal_title(p.dichiarazione_sintesi, p.partito)
                 if "le intese sul programma" in p.dichiarazione_sintesi.lower():
                     clean_t = "Riforma IRPEF ad aliquota marginale al 35%, taglio delle micro-tasse e azzeramento dei sussidi ambientalmente dannosi"
@@ -460,17 +543,17 @@ def seed_database_if_empty():
                 if clean_t and clean_t != p.dichiarazione_sintesi:
                     p.dichiarazione_sintesi = clean_t
 
-                act_str = (p.tipo_azione or "").lower()
-                text_str = (p.dichiarazione_sintesi or "").lower()
-                is_formal = any(k in act_str or k in text_str for k in FORMAL_ACT_KEYWORDS)
-
-                # Evaluate public finance impact and factual veracity against institutional criteria
-                from app.ai.fact_checker import analyze_feasibility_and_factcheck
-                from app.ai.fiscal_calculator import calculate_fiscal_impact_and_coverage, calculate_financial_coverage_percentage
-
                 # FIX AI-06: skip redundant re-calculation on startup if proposal already has valid fiscal & fact-check data
                 needs_fiscal = not p.costo_stimato or p.costo_stimato.lower() in ["non quantificato", "non quantificata", "da definire"] or not p.coperture_dichiarate or len(p.coperture_dichiarate) < 15
-                needs_factcheck = not p.fact_check_status or not p.fact_check_motivazione or p.truth_score is None
+                st_low = (p.fact_check_status or "").lower()
+                score_contradiction = (
+                    p.truth_score is None
+                    or ("inattuabile" in st_low and p.truth_score > 40.0)
+                    or ("fake" in st_low and p.truth_score > 20.0)
+                    or ("esagerat" in st_low and p.truth_score > 65.0)
+                    or (st_low == "verificato" and p.truth_score < 85.0)
+                )
+                needs_factcheck = not p.fact_check_status or not p.fact_check_motivazione or score_contradiction
 
                 if needs_fiscal:
                     f_calc = calculate_fiscal_impact_and_coverage(
@@ -491,24 +574,24 @@ def seed_database_if_empty():
                         sintesi=p.dichiarazione_sintesi,
                         costo_stimato=p.costo_stimato,
                         coperture=p.coperture_dichiarate,
-                        raw_text=p.raw_text or ""
+                        raw_text=p.raw_text or "",
+                        tipo_azione=p.tipo_azione or ""
                     )
                     feas, st, mot, src = feas_data[:4]
-                    t_vote = feas_data[4] if len(feas_data) > 4 else 75.0
+                    t_vote = feas_data[4] if len(feas_data) > 4 else calculate_proposal_truthfulness_score(st)
                     p.fact_check_status = st
                     p.fact_check_motivazione = mot
                     p.fact_check_fonte = src
                     p.truth_score = t_vote
             db.commit()
 
-            # Recalculate and persist calibrated party truthfulness and coverage scores
-            from app.ai.fact_checker import calculate_proposal_truthfulness_score
+            # Recalculate and persist calibrated party truthfulness and coverage scores (exact party match)
             for party in db.query(PoliticalParty).all():
                 p_props = db.query(PoliticalProposal).filter(
-                    (PoliticalProposal.party_id == party.id) | (PoliticalProposal.partito.ilike(f"%{party.name}%"))
+                    (PoliticalProposal.party_id == party.id) | (PoliticalProposal.partito == party.name)
                 ).all()
                 if p_props:
-                    party.truthfulness_score = round(sum((pr.truth_score if hasattr(pr, 'truth_score') and pr.truth_score is not None else calculate_proposal_truthfulness_score(pr.fact_check_status)) for pr in p_props) / len(p_props), 1)
+                    party.truthfulness_score = round(sum(calculate_proposal_truthfulness_score(pr.fact_check_status, pr.truth_score) for pr in p_props) / len(p_props), 1)
                     party.financial_reliability_score = round(sum(calculate_financial_coverage_percentage(pr.costo_stimato, pr.coperture_dichiarate, pr.dichiarazione_sintesi) for pr in p_props) / len(p_props), 1)
             db.commit()
             print("[Database] Realistic Art. 81 public finance audit and factual veracity applied cleanly.")
@@ -538,11 +621,11 @@ def seed_database_if_empty():
 async def _autonomous_self_keepalive():
     """
     Autonomous Keepalive: pings the public Render URL every 7 minutes.
-    Because Render monitors incoming HTTP traffic on politclens.onrender.com, this public request
+    Because Render monitors incoming HTTP traffic on politilens.onrender.com, this public request
     resets Render's 15-minute idle timer, preventing the free tier container from sleeping.
     """
     await asyncio.sleep(45)  # Let server complete initial startup
-    external_url = os.environ.get("RENDER_EXTERNAL_URL", "https://politilens.onrender.com")
+    external_url = os.environ.get("RENDER_EXTERNAL_URL", "https://politclens.onrender.com")
     health_endpoint = f"{external_url.rstrip('/')}/api/health"
     print(f"[Keepalive] Autonomous 24/7 background keepalive loop started (target: {health_endpoint}).")
     
@@ -618,7 +701,7 @@ import os as _os
 _CORS_ORIGINS = [
     o.strip() for o in _os.getenv(
         "CORS_ORIGINS",
-        "http://localhost:3000,http://localhost:3001,https://politclens.onrender.com"
+        "http://localhost:3000,http://localhost:3001,https://politilens.onrender.com,https://politclens.onrender.com"
     ).split(",") if o.strip()
 ]
 app.add_middleware(
@@ -628,6 +711,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # Helper to classify User-Agent for analytics
 def parse_visitor_user_agent(ua_str: str) -> dict:
@@ -681,6 +765,10 @@ IGNORED_STATIC_EXTENSIONS = (
 @app.middleware("http")
 async def visitor_tracking_middleware(request: Request, call_next):
     response = await call_next(request)
+    # Standard security headers
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
     
     path = request.url.path
     if (
@@ -752,13 +840,17 @@ app.include_router(admin_router)
 
 @app.get("/api/health")
 async def health_check():
+    from app.ai.llm_provider import llm_provider
     ollama_ok = await ollama_client.is_available()
     models = await ollama_client.list_models() if ollama_ok else []
+    provider_info = await llm_provider.get_active_provider_info()
     return {
         "status": "online",
         "app": settings.APP_NAME,
         "version": settings.APP_VERSION,
         "neutrality_policy": "Absolute Political Impartiality & Institutional Fact-Checking",
+        "active_ai_provider": provider_info.get("provider", "deterministic"),
+        "active_ai_label": provider_info.get("label", "PoliticLens Institutional AI Engine"),
         "ollama_connected": ollama_ok,
         "ollama_models": models
     }
@@ -833,11 +925,12 @@ if os.path.exists(STATIC_DIR):
     async def serve_catch_all(full_path: str):
         if full_path.startswith("api/"):
             return JSONResponse(status_code=404, content={"detail": "Not Found"})
-        file_path = os.path.join(STATIC_DIR, full_path)
-        if os.path.isfile(file_path):
+        static_real = os.path.realpath(STATIC_DIR)
+        file_path = os.path.realpath(os.path.join(STATIC_DIR, full_path))
+        if file_path.startswith(static_real) and os.path.isfile(file_path):
             return FileResponse(file_path)
-        html_file = os.path.join(STATIC_DIR, f"{full_path}.html")
-        if os.path.isfile(html_file):
+        html_file = os.path.realpath(os.path.join(STATIC_DIR, f"{full_path}.html"))
+        if html_file.startswith(static_real) and os.path.isfile(html_file):
             return FileResponse(html_file)
         # Default fallback to index.html
         return FileResponse(os.path.join(STATIC_DIR, "index.html"))

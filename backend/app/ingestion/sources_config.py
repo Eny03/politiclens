@@ -351,39 +351,43 @@ PARTY_OFFICIAL_CHANNELS = {
 }
 
 # Party detection aliases to accurately map textual mentions to normalized party codes
+# Avoid ambiguous Italian common words (e.g. "boccia" = verb, "lupi" = wolves, "ap" = generic abbr)
 PARTY_ALIASES = {
-    "Fratelli d'Italia": ["fratelli d'italia", "fdi", "giorgia meloni", "meloni", "crosetto", "lollobrigida", "donzelli", "fitto", "fazzolari", "bignami"],
-    "Partito Democratico": ["partito democratico", "pd", "elly schlein", "schlein", "provenzano", "boccia", "braga", "misiani", "orlando", "gualtieri"],
+    "Fratelli d'Italia": ["fratelli d'italia", "fdi", "giorgia meloni", "meloni", "crosetto", "lollobrigida", "donzelli", "fazzolari", "bignami"],
+    "Partito Democratico": ["partito democratico", "pd", "elly schlein", "schlein", "provenzano", "francesco boccia", "senatore boccia", "chiara braga", "misiani", "andrea orlando", "gualtieri"],
     "Movimento 5 Stelle": ["movimento 5 stelle", "m5s", "giuseppe conte", "conte", "cinquestelle", "5 stelle", "appendino", "patuanelli", "todde", "traversi"],
-    "Lega - Salvini Premier": ["lega", "lega - salvini premier", "lega nord", "matteo salvini", "salvini", "giorgetti", "calderoli", "crippa", "fedriga", "zaia", "borghi", "bagnai"],
-    "Forza Italia": ["forza italia", "antonio tajani", "tajani", "barelli", "ronzulli", "gasparri", "berlusconi", "occhipinti", "cannizzaro", "roberto occhiuto"],
-    "Alleanza Verdi e Sinistra": ["alleanza verdi e sinistra", "alleanza verdi sinistra", "avs", "verdi e sinistra", "angelo bonelli", "nicola fratoianni", "bonelli", "fratoianni", "europa verde", "sinistra italiana", "salis"],
+    "Lega - Salvini Premier": ["lega - salvini premier", "lega salvini", "lega nord", "matteo salvini", "salvini", "giorgetti", "calderoli", "crippa", "fedriga", "zaia", "claudio borghi", "bagnai", "la lega"],
+    "Forza Italia": ["forza italia", "antonio tajani", "tajani", "paolo barelli", "ronzulli", "gasparri", "berlusconi", "cannizzaro", "roberto occhiuto"],
+    "Alleanza Verdi e Sinistra": ["alleanza verdi e sinistra", "alleanza verdi sinistra", "avs", "verdi e sinistra", "angelo bonelli", "nicola fratoianni", "bonelli", "fratoianni", "europa verde", "sinistra italiana", "ilaria salis"],
     "Azione": ["partito azione", "azione - calenda", "carlo calenda", "calenda", "gruppo azione", "azione under 30", "fabrizio benzoni", "elena bonetti", "giulia pastorella"],
-    "Italia Viva": ["italia viva", "iv", "matteo renzi", "renzi", "boschi", "faraone", "bellanova", "delbono"],
+    "Italia Viva": ["italia viva", "matteo renzi", "renzi", "maria elena boschi", "davide faraone", "raffaella paita", "teresa bellanova"],
     "+Europa": ["+europa", "più europa", "piu europa", "riccardo magi", "magi", "emma bonino", "bonino", "della vedova"],
     "Noi Moderati": ["noi moderati", "maurizio lupi", "saverio romano", "pino bicchielli", "alessandro colucci", "mara carfagna", "mariastella gelmini"],
     "Partito Liberal Democratico": ["partito liberal democratico", "partito liberaldemocratico", "pld", "liberal democratici", "libdem", "orizzonti liberali", "luigi marattin", "marattin", "andrea marcucci"],
-    "Futuro Nazionale": ["futuro nazionale", "fnv", "roberto vannacci", "vannacci", "massimiliano simoni"],
-    "ORA!": ["movimento ora", "partito ora", "comitato ora", "ora italia", "ora-italia", "alberto forchielli", "forchielli", "michele boldrin", "boldrin", "drin drin"],
-    "Radicali Italiani": ["radicali italiani", "radicali", "matteo hallissey", "hallissey", "giulia crivellini", "maurizio turco", "partito radicale"],
-    "Rifondazione Comunista": ["rifondazione comunista", "prc", "maurizio acerbo", "acerbo", "sinistra europea"],
+    "Futuro Nazionale": ["futuro nazionale", "fnv", "futnaz", "roberto vannacci", "vannacci", "massimiliano simoni"],
+    "ORA!": ["movimento ora", "partito ora", "comitato ora", "ora italia", "ora-italia", "ora!", "alberto forchielli", "forchielli", "michele boldrin", "boldrin", "drin drin"],
+    "Radicali Italiani": ["radicali italiani", "matteo hallissey", "hallissey", "giulia crivellini", "maurizio turco", "partito radicale"],
+    "Rifondazione Comunista": ["rifondazione comunista", "prc", "maurizio acerbo", "acerbo"],
     "Potere al Popolo": ["potere al popolo", "pap", "giuliano granato", "marta collot", "unione popolare"],
     "Democrazia Sovrana Popolare": ["democrazia sovrana popolare", "dsp", "marco rizzo", "francesco toscano", "sovrana popolare"],
-    "Südtiroler Volkspartei": ["südtiroler volkspartei", "svp", "dieter steger", "steger", "herbert dorfmann"],
-    "Sud chiama Nord": ["sud chiama nord", "scn", "cateno de luca", "de luca cateno", "laura castelli", "francesco gallo", "dafne musolino", "libertà de luca"],
-    "Pace Terra Dignità": ["pace terra dignità", "pace terra e dignità", "pace terra e dignita", "ptd", "michele santoro", "santoro", "raniero la valle"],
+    "Südtiroler Volkspartei": ["südtiroler volkspartei", "sudtiroler volkspartei", "svp", "dieter steger", "steger", "herbert dorfmann"],
+    "Sud chiama Nord": ["sud chiama nord", "scn", "cateno de luca", "de luca cateno", "laura castelli", "francesco gallo", "dafne musolino"],
+    "Pace Terra Dignità": ["pace terra dignità", "pace terra e dignità", "pace terra dignita", "pace terra e dignita", "ptd", "michele santoro", "santoro", "raniero la valle"],
     "Partito Socialista Italiano": ["partito socialista italiano", "partito socialista", "psi", "enzo maraio", "maraio", "socialisti italiani"],
-    "Alternativa Popolare": ["alternativa popolare", "ap", "stefano bandecchi", "bandecchi", "paolo alli"]
+    "Alternativa Popolare": ["alternativa popolare", "stefano bandecchi", "bandecchi", "paolo alli"]
 }
 
-# Macro-topics detection keywords
+# Canonical 11 macro-topics detection keywords (aligned across Dashboard, Matrix, RAG & GapDetector)
 MACRO_TOPICS_KEYWORDS = {
-    "Lavoro": ["salario minimo", "lavoro", "occupazione", "cuneo fiscale", "contratti", "inps", "disoccupazione", "precariato", "stage", "settimana corta", "pensioni", "quota 41", "fornero", "sicurezza sul lavoro", "decontribuzione", "smart working"],
-    "Economia": ["fisco", "tasse", "flat tax", "irpef", "iva", "manovra", "patrimoniale", "debito pubblico", "pil", "def", "extraprofitti", "privatizzazioni", "bilancio", "inflazione", "superbonus", "concordato preventivo", "rottamazione"],
-    "Energia": ["nucleare", "rinnovabili", "eolico", "fotovoltaico", "gas", "smr", "bollette", "caro energia", "transizione energetica", "idrogeno", "mase", "trivelle", "nucleare pulito", "comunità energetiche"],
-    "Ambiente": ["clima", "siccità", "inquinamento", "co2", "decarbonizzazione", "green deal", "dissesto idrogeologico", "sad", "biodiversità", "auto elettriche", "alluvioni", "case green"],
+    "Fisco": ["fisco", "tasse", "flat tax", "irpef", "iva", "manovra", "patrimoniale", "debito pubblico", "pil", "def", "extraprofitti", "bilancio", "inflazione", "superbonus", "concordato preventivo", "rottamazione", "accise", "pignoramenti", "sovraindebitamento"],
+    "Lavoro": ["salario minimo", "lavoro", "occupazione", "cuneo fiscale", "contratti", "disoccupazione", "precariato", "stage", "settimana corta", "sicurezza sul lavoro", "decontribuzione", "smart working", "reddito di cittadinanza", "scala mobile", "lsu", "lpu"],
+    "Pensioni": ["pensioni", "pensione", "quota 41", "quota 103", "fornero", "uscita a 64", "opzione donna", "previdenza", "inps", "tfr"],
     "Sanità": ["sanità", "ssn", "medici", "infermieri", "ospedali", "liste d'attesa", "pronto soccorso", "fondo sanitario", "mes sanitario", "ticket", "carenza personale", "salute mentale"],
-    "Istruzione": ["scuola", "università", "docenti", "insegnanti", "istruzione", "its", "ricerca", "stipendi docenti", "tempo pieno", "valditara", "maturità", "precari scuola", "edilizia scolastica"],
-    "Diritti Civili": ["diritti civili", "giustizia", "magistrati", "csm", "separazione delle carriere", "ius scholae", "cittadinanza", "carceri", "fine vita", "matrimonio egualitario", "adozioni", "carriere alias", "ddl zan", "prescrizione"],
-    "Esteri": ["ucraina", "russia", "medio oriente", "gaza", "israele", "nato", "spese militari", "difesa europea", "eurobond", "piano mattei", "europa", "ue", "politica estera", "armi ucraina", "migranti albania"]
+    "Energia": ["nucleare", "rinnovabili", "eolico", "fotovoltaico", "gas", "smr", "bollette", "caro energia", "transizione energetica", "idrogeno", "mase", "trivelle", "comunità energetiche", "clima", "co2", "decarbonizzazione", "green deal", "sad"],
+    "Istruzione": ["scuola", "università", "docenti", "insegnanti", "istruzione", "its", "ricerca", "stipendi docenti", "tempo pieno", "valditara", "maturità", "precari scuola", "edilizia scolastica", "asili nido"],
+    "Istituzioni": ["premierato", "autonomia differenziata", "lep", "giustizia", "magistrati", "csm", "separazione delle carriere", "legittima difesa", "riforma costituzionale", "legge elettorale", "upb", "prescrizione", "garantismo"],
+    "Immigrazione": ["immigrazione", "migranti", "sbarchi", "albania", "cpr", "blocco navale", "rimpatri", "frontiere", "decreto flussi", "accoglienza", "bossi-fini", "dublino"],
+    "Politica Estera": ["ucraina", "russia", "medio oriente", "gaza", "israele", "nato", "spese militari", "difesa europea", "eurobond", "piano mattei", "europa", "ue", "politica estera", "armi ucraina", "disinformazione"],
+    "Diritti Civili": ["diritti civili", "ius scholae", "ius soli", "cittadinanza", "carceri", "fine vita", "eutanasia", "cannabis", "matrimonio egualitario", "adozioni", "ddl zan", "gpa", "maternità surrogata"],
+    "Infrastrutture": ["ponte sullo stretto", "infrastrutture", "tav", "ferrovie", "treni", "rete idrica", "dissesto idrogeologico", "brennero", "trasporti", "porti", "piano casa", "rigenerazione urbana"]
 }

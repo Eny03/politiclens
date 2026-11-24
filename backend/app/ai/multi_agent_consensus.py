@@ -9,7 +9,7 @@ from app.ingestion.universal_web_search import search_web_news, search_duckduckg
 from app.ingestion.text_extractor import compute_content_hash, clean_html
 from app.ai.extractor import extract_proposals_from_text
 from app.ai.embeddings import get_text_embedding
-from app.ai.fact_checker import analyze_feasibility_and_factcheck
+from app.ai.fact_checker import analyze_feasibility_and_factcheck, calculate_proposal_truthfulness_score
 from app.ai.fiscal_calculator import calculate_fiscal_impact_and_coverage, sanitize_proposal_title
 from app.ai.policy_merger import find_matching_existing_proposal, merge_or_update_policy_proposal
 from app.ingestion.sources_config import PARTY_ALIASES, MACRO_TOPICS_KEYWORDS
@@ -94,13 +94,23 @@ class FiscalAuditorAgent:
             costo_stimato=proposal_item.get("cost"),
             coperture_dichiarate=proposal_item.get("coverage")
         )
+        feas, fc_status, fc_mot, fc_src, truth_score = analyze_feasibility_and_factcheck(
+            partito=proposal_item["party"],
+            macro_argomento=proposal_item["topic"],
+            sintesi=proposal_item["synthesis"],
+            costo_stimato=fiscal_info["costo_stimato"],
+            coperture=fiscal_info["coperture_dichiarate"],
+            raw_text=proposal_item.get("raw_text", ""),
+            tipo_azione=proposal_item.get("action_type", "")
+        )
         audited = dict(proposal_item)
         audited["cost"] = fiscal_info["costo_stimato"]
         audited["coverage"] = fiscal_info["coperture_dichiarate"]
-        audited["feasibility"] = fiscal_info["fattibilita_finanziaria"]
-        audited["fact_check_status"] = fiscal_info["fact_check_status"]
-        audited["fact_check_motivazione"] = fiscal_info["fact_check_motivazione"]
-        audited["fact_check_fonte"] = fiscal_info["fact_check_fonte"]
+        audited["feasibility"] = fiscal_info["fattibilita_finanziaria"] or feas
+        audited["fact_check_status"] = fc_status
+        audited["fact_check_motivazione"] = fc_mot
+        audited["fact_check_fonte"] = fc_src
+        audited["truth_score"] = truth_score
         return audited
 
 class ConsensusArbiterAgent:
@@ -145,6 +155,12 @@ class ConsensusArbiterAgent:
             else:
                 consensus_score = 25
 
+            val_syn = sanitize_and_validate_proposal_statement(synthesis)
+            if not val_syn:
+                continue
+            synthesis = val_syn
+            if party_obj:
+                p_name = party_obj.name
             item_hash = compute_content_hash(f"{p_name}_{topic}_{synthesis}")
 
             # Check if matching proposal exists in permanent memory
@@ -163,18 +179,25 @@ class ConsensusArbiterAgent:
             )
 
             if matching_existing:
-                # Same specific measure updated with fresh details
+                old_syn = matching_existing.dichiarazione_sintesi
                 matching_existing.dichiarazione_sintesi = synthesis
                 matching_existing.costo_stimato = item["cost"]
                 matching_existing.coperture_dichiarate = item["coverage"]
                 matching_existing.fattibilita_finanziaria = item["feasibility"]
                 matching_existing.fact_check_status = item["fact_check_status"]
                 matching_existing.fact_check_motivazione = item["fact_check_motivazione"]
+                matching_existing.fact_check_fonte = item["fact_check_fonte"]
+                matching_existing.truth_score = item.get("truth_score", calculate_proposal_truthfulness_score(item["fact_check_status"]))
                 matching_existing.fonte_url = item["source_url"]
                 matching_existing.fonte_titolo = item["source_title"]
                 matching_existing.fonte_testata = item["source_name"]
                 matching_existing.timestamp = item["timestamp"]
-                matching_existing.content_hash = item_hash
+                # Avoid UNIQUE collision on content_hash
+                if not db.query(PoliticalProposal).filter(
+                    PoliticalProposal.content_hash == item_hash,
+                    PoliticalProposal.id != matching_existing.id
+                ).first():
+                    matching_existing.content_hash = item_hash
                 if emb_json:
                     matching_existing.embedding = emb_json
                 db.add(AuditLog(
@@ -182,7 +205,7 @@ class ConsensusArbiterAgent:
                     entity_type="programma",
                     entity_id=str(matching_existing.id),
                     entity_name=f"{p_name}: {topic}",
-                    old_value=None,
+                    old_value=old_syn[:90] + "..." if len(old_syn) > 90 else old_syn,
                     new_value=synthesis[:90] + "..." if len(synthesis) > 90 else synthesis,
                     agent_responsible="ConsensusArbiterAgent",
                     details=f"Modifica proposta per {p_name} ({topic}) tramite Consensus Multi-AI: '{synthesis}'.",
@@ -190,8 +213,8 @@ class ConsensusArbiterAgent:
                 ))
                 updated_count += 1
             else:
-                # Brand new distinct proposal under this topic
-                from app.ai.fact_checker import calculate_proposal_truthfulness_score
+                if db.query(PoliticalProposal).filter(PoliticalProposal.content_hash == item_hash).first():
+                    continue
                 new_record = PoliticalProposal(
                     party_id=party_id,
                     partito=p_name,
@@ -204,7 +227,7 @@ class ConsensusArbiterAgent:
                     fact_check_status=item["fact_check_status"],
                     fact_check_motivazione=item["fact_check_motivazione"],
                     fact_check_fonte=item["fact_check_fonte"],
-                    truth_score=calculate_proposal_truthfulness_score(item["fact_check_status"]),
+                    truth_score=item.get("truth_score", calculate_proposal_truthfulness_score(item["fact_check_status"])),
                     fonte_url=item["source_url"],
                     fonte_titolo=item["source_title"],
                     fonte_testata=item["source_name"],
@@ -213,10 +236,6 @@ class ConsensusArbiterAgent:
                     embedding=emb_json,
                     timestamp=item["timestamp"]
                 )
-                val_syn = sanitize_and_validate_proposal_statement(synthesis)
-                if not val_syn:
-                    continue
-                new_record.dichiarazione_sintesi = val_syn
                 db.add(new_record)
                 db.flush()
                 db.add(AuditLog(

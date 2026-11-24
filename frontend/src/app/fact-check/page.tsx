@@ -31,7 +31,7 @@ export default function FactCheckPage() {
       try {
         setLoading(true);
         const [propsData, benchData] = await Promise.all([
-          fetchProposals({ limit: 100 }),
+          fetchProposals({ limit: 500 }),
           fetchBenchmarks()
         ]);
         setProposals(propsData);
@@ -48,16 +48,23 @@ export default function FactCheckPage() {
   const statuses = [
     "Tutti",
     "Verificato",
+    "Parzialmente verificato",
+    "Posizione programmatica",
     "In attesa di copertura",
     "Esagerato",
     "Inattuabile",
-    "Fake / Infondato",
-    "Non verificabile"
+    "Fake / Infondato"
   ];
+
+  const statusCounts: Record<string, number> = { Tutti: proposals.length };
+  for (const p of proposals) {
+    const key = (p.fact_check_status || "").trim().toLowerCase();
+    statusCounts[key] = (statusCounts[key] || 0) + 1;
+  }
 
   const filteredProposals = proposals.filter((p) => {
     if (statusFilter !== "Tutti") {
-      if (!p.fact_check_status.toLowerCase().includes(statusFilter.toLowerCase())) {
+      if ((p.fact_check_status || "").trim().toLowerCase() !== statusFilter.toLowerCase()) {
         return false;
       }
     }
@@ -152,17 +159,21 @@ export default function FactCheckPage() {
         <div className="flex items-center gap-1.5 flex-wrap">
           {statuses.map((st) => {
             const isSelected = statusFilter === st;
+            const cnt = st === "Tutti" ? proposals.length : (statusCounts[st.toLowerCase()] || 0);
             return (
               <button
                 key={st}
                 onClick={() => setStatusFilter(st)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all inline-flex items-center gap-1.5 ${
                   isSelected
                     ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs"
-                    : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200"
+                    : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700"
                 }`}
               >
-                {st}
+                <span>{st}</span>
+                <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full ${isSelected ? "bg-white/20 dark:bg-slate-900/20" : "bg-slate-200/80 dark:bg-slate-700"}`}>
+                  {cnt}
+                </span>
               </button>
             );
           })}

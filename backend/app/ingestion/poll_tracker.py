@@ -390,30 +390,38 @@ class PollTrackerAgent:
         parsed_from_web = {}
         momentum_scores = {c: 0 for c in SURVEY_INSTITUTES_OBSERVATIONS.keys()}
 
+        from app.ingestion.text_extractor import _match_term
+
         for art in web_articles:
             full_text = f"{art['title']} {art.get('desc', '')}".lower()
             if not any(pi in full_text for pi in POLL_INDICATORS):
                 continue
 
+            # Split into clauses/sentences so Party A rising doesn't boost Party B falling in the same article
+            clauses = re.split(r"[.!?;,–—|]", full_text)
+
             for code, info in SURVEY_INSTITUTES_OBSERVATIONS.items():
                 kws = PARTY_KEYWORDS.get(code, [])
-                party_mentioned = any(kw in full_text for kw in kws)
-                if party_mentioned:
-                    words = set(re.findall(r"\b[a-zA-Zàèéìòù]+\b", full_text))
-                    pos_hits = len(words & POS_WORDS)
-                    neg_hits = len(words & NEG_WORDS)
-                    momentum_scores[code] += (pos_hits - neg_hits)
+                matched_clauses = [cl for cl in clauses if any(_match_term(kw, cl) for kw in kws)]
+                if matched_clauses:
+                    for cl in matched_clauses:
+                        words = set(re.findall(r"[a-zA-Zàèéìòù]+", cl))
+                        pos_hits = len(words & POS_WORDS)
+                        neg_hits = len(words & NEG_WORDS)
+                        momentum_scores[code] += (pos_hits - neg_hits)
 
                     if code not in parsed_from_web:
                         for kw in kws:
-                            pattern1 = rf"\b{re.escape(kw)}\b[^\w\d%]{{0,18}}?(?:al|a|sale al|scende al|attestat[oa] al|raggiunge il|stabile al)?\s*[:\s]*(\d+[.,]\d+)%"
-                            pattern2 = rf"(\d+[.,]\d+)%\s*(?:per|a)?\s*\b{re.escape(kw)}\b"
+                            esc_kw = re.escape(kw)
+                            pref = r"\b" if kw[0].isalnum() else r"(?:^|[\s\(\[\"\'])"
+                            suff = r"\b" if kw[-1].isalnum() else r"(?:$|[\s\)\]\"\'.,;:!?])"
+                            pattern1 = rf"{pref}{esc_kw}{suff}[^\w\d%]{{0,18}}?(?:al|a|sale al|scende al|attestat[oa] al|raggiunge il|stabile al)?\s*[:\s]*(\d+[.,]\d+)%"
+                            pattern2 = rf"(\d+[.,]\d+)%\s*(?:per|a)?\s*{pref}{esc_kw}{suff}"
                             m = re.search(pattern1, full_text) or re.search(pattern2, full_text)
                             if m:
                                 try:
                                     val = float(m.group(1).replace(",", "."))
                                     if info["min"] <= val <= info["max"]:
-                                        # Detect institute if mentioned in title
                                         inst_label = "Monitor Live"
                                         for inst_name in ["SWG", "YouTrend", "Agi", "Ipsos", "Tecnè", "Tecne", "BiDiMedia", "Noto"]:
                                             if inst_name.lower() in art["title"].lower():
@@ -523,25 +531,19 @@ class PollTrackerAgent:
                 info = SURVEY_INSTITUTES_OBSERVATIONS.get(lookup_code, {})
                 fallback_prev = info.get("previous_wave", data["previous_poll_percentage"])
 
-                # Dynamic measurement tracking:
-                # 1. Compare directly against the current DB value if a new measurement or news drift changed the value
-                # 2. Maintain the previous wave baseline if no delta has occurred yet
                 current_in_db = party.poll_percentage or 0.0
                 new_pct = data["poll_percentage"]
 
-                if current_in_db > 0 and abs(new_pct - current_in_db) >= 0.05:
-                    # An active change occurred since the last check!
+                # Preserve real previous wave baseline: only shift previous_poll_percentage on genuine wave delta (>= 0.2%)
+                if current_in_db > 0 and abs(new_pct - current_in_db) >= 0.2:
                     prev_measurement = current_in_db
-                    delta = round(new_pct - prev_measurement, 1)
-                    new_trend = f"+{delta:.1f}%" if delta > 0 else (f"{delta:.1f}%" if delta < 0 else "stabile")
                 elif party.previous_poll_percentage and party.previous_poll_percentage > 0:
                     prev_measurement = party.previous_poll_percentage
-                    delta = round(new_pct - prev_measurement, 1)
-                    new_trend = f"+{delta:.1f}%" if delta > 0 else (f"{delta:.1f}%" if delta < 0 else "stabile")
                 else:
                     prev_measurement = fallback_prev
-                    delta = round(new_pct - prev_measurement, 1)
-                    new_trend = f"+{delta:.1f}%" if delta > 0 else (f"{delta:.1f}%" if delta < 0 else "stabile")
+
+                delta = round(new_pct - prev_measurement, 1)
+                new_trend = f"+{delta:.1f}%" if delta > 0 else (f"{delta:.1f}%" if delta < 0 else "stabile")
 
                 detailed_sources = (
                     f"Media ponderata 6 istituti (SWG, Supermedia YouTrend/AGI, Ipsos, Tecnè, BiDiMedia, Noto) • "
@@ -588,18 +590,25 @@ class PollTrackerAgent:
             print(f"[PollTrackerAgent] Database commit error: {e}")
             return []
 
-        if updated_records:
+        # Record consolidated AuditLog only if at least one party changed OR > 6 hours since last poll log
+        last_poll_audit = self.db.query(AuditLog).filter(
+            AuditLog.event_type.in_(["POLL_UPDATE", "sondaggi aggiornati", "POLL_SWEEP_COMPLETED"])
+        ).order_by(AuditLog.timestamp.desc()).first()
+        has_any_change = any(abs(r["new_pct"] - r["prev_pct"]) >= 0.1 for r in updated_records)
+        stale_audit = (not last_poll_audit) or ((now - last_poll_audit.timestamp).total_seconds() >= 21600)
+
+        if updated_records and (has_any_change or stale_audit):
             summary_lines = [
                 f"{r['party_code']}: {r['prev_pct']:.1f}% -> {r['new_pct']:.1f}% ({r['trend']})"
                 for r in updated_records
             ]
             audit_entry = AuditLog(
-                event_type="POLL_UPDATE",
+                event_type="sondaggi aggiornati",
                 entity_type="sondaggi",
-                entity_id="ALL_22_PARTIES",
+                entity_id=f"ALL_{len(updated_records)}_PARTIES",
                 entity_name="Rilevazione Nazionale Istituti di Sondaggio",
                 old_value=f"Rilevazione precedente per {len(updated_records)} partiti",
-                new_value="; ".join(summary_lines[:8]) + f" (+altri {len(updated_records)-8})",
+                new_value="; ".join(summary_lines[:8]) + (f" (+altri {len(updated_records)-8})" if len(updated_records) > 8 else ""),
                 agent_responsible="PollTrackerAgent",
                 details=f"Media demoscopica certificata su 6 istituti (SWG Tg La7, Supermedia YouTrend/Agi, BiDiMedia, Ipsos, Tecnè, Noto) con variazioni calcolate rispetto alla rilevazione precedente al {now.strftime('%d/%m/%Y')}.",
                 timestamp=now

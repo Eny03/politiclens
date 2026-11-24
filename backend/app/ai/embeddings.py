@@ -1,16 +1,26 @@
-import math
 import re
-import json
 import hashlib
-from typing import List, Dict, Any, Tuple
+from typing import List
 import numpy as np
-from app.ai.ollama_client import ollama_client
 
 DIMENSION = 384
+
+ITALIAN_STOPWORDS = {
+    "il", "lo", "la", "i", "gli", "le", "un", "uno", "una", "di", "a", "da", "in",
+    "con", "su", "per", "tra", "fra", "del", "dello", "della", "dei", "degli", "delle",
+    "al", "allo", "alla", "ai", "agli", "alle", "dal", "dallo", "dalla", "dai", "dagli", "dalle",
+    "nel", "nello", "nella", "nei", "negli", "nelle", "sul", "sullo", "sulla", "sui", "sugli", "sulle",
+    "e", "ed", "o", "od", "ma", "se", "che", "chi", "cui", "non", "piu", "più", "come", "anche",
+    "sono", "stato", "stata", "stati", "state", "essere", "avere", "tutti", "tutte", "tutto",
+    "questo", "questa", "questi", "queste", "quello", "quella", "ogni", "suo", "sua", "loro",
+    "alla", "dalle", "nelle", "degli", "delle", "degli", "verso", "senza", "oltre", "fino", "circa"
+}
+
 
 def _stable_hash(s: str) -> int:
     """Computes stable 32-bit integer hash independent of Python process hash randomization."""
     return int(hashlib.md5(s.encode("utf-8")).hexdigest()[:8], 16)
+
 
 def _normalize_vector(vec: np.ndarray) -> np.ndarray:
     norm = np.linalg.norm(vec)
@@ -18,78 +28,74 @@ def _normalize_vector(vec: np.ndarray) -> np.ndarray:
         return vec / norm
     return vec
 
+
 def _standardize_dimension(v: List[float], target_dim: int = DIMENSION) -> np.ndarray:
-    """
-    Standardizes any vector to target_dim (default 384) via linear resampling
-    and applies L2 normalization. Handles mismatch between Ollama (e.g. 768, 1024)
-    and deterministic (384) vectors.
-    """
+    """Standardizes any vector to target_dim (default 384) and applies L2 normalization."""
     if not v:
         return np.zeros(target_dim, dtype=np.float32)
     arr = np.array(v, dtype=np.float32)
     current_dim = len(arr)
     if current_dim == target_dim:
         return _normalize_vector(arr)
-    
-    # 1D linear interpolation across normalized domain [0, 1]
+
     x_old = np.linspace(0.0, 1.0, current_dim)
     x_new = np.linspace(0.0, 1.0, target_dim)
     resampled = np.interp(x_new, x_old, arr)
     return _normalize_vector(resampled)
 
+
 def _local_deterministic_embedding(text: str, dim: int = DIMENSION) -> List[float]:
     """
-    High-fidelity deterministic local text embedding generator.
-    Creates a dense normalized vector based on single words, word bigrams, and character n-grams.
-    FIX AI-09: includes consecutive word bigrams (e.g. 'salario minimo', 'quota 41', 'cuneo fiscale')
-    for rich semantic phrase preservation.
+    High-fidelity deterministic local text embedding generator (consistent 384-dim space).
+    Uses stopword-filtered content words, word bigrams (e.g. 'salario_minimo', 'quota_41',
+    'cuneo_fiscale'), signed random projection (Feature Hashing), and character trigrams
+    for sharp Italian semantic retrieval and deduplication.
     """
-    clean_words = re.findall(r"\w+", text.lower())
+    raw_words = re.findall(r"[a-zA-ZÀ-ÿ0-9]+", (text or "").lower())
+    content_words = [w for w in raw_words if (len(w) > 2 or w.isdigit()) and w not in ITALIAN_STOPWORDS]
+    if not content_words:
+        content_words = raw_words
+
     vec = np.zeros(dim, dtype=np.float32)
-    
-    if not clean_words:
+    if not content_words:
         return vec.tolist()
-        
-    for i, word in enumerate(clean_words):
-        # 1. Stable Word hash
-        h = _stable_hash(word) % dim
-        vec[h] += 1.0
 
-        # 2. Word Bigram hash (pairs of consecutive words: key for compound policy phrases)
-        if i < len(clean_words) - 1:
-            w_bg = f"{word}_{clean_words[i+1]}"
-            h_wbg = _stable_hash(w_bg) % dim
-            vec[h_wbg] += 0.85
+    def _add_feature(feat: str, weight: float):
+        h = _stable_hash(feat)
+        idx = h % dim
+        sign = 1.0 if ((h >> 16) & 1) == 0 else -1.0
+        vec[idx] += sign * weight
 
-        # 3. Character bigram hashes (sub-word morphologic features)
-        for j in range(len(word) - 1):
-            bg = word[j:j+2]
-            h_bg = (_stable_hash(bg) * 31) % dim
-            vec[h_bg] += 0.4
-            
+    for i, word in enumerate(content_words):
+        # 1. Word unigram (and 5-char stem prefix for Italian morphological variants)
+        _add_feature(f"w:{word}", 1.2)
+        if len(word) >= 6:
+            _add_feature(f"s:{word[:5]}", 0.7)
+
+        # 2. Consecutive content-word bigram (captures compound policy phrases)
+        if i < len(content_words) - 1:
+            _add_feature(f"bg:{word}_{content_words[i + 1]}", 1.5)
+
+        # 3. Character trigrams on content words (morphological robustness without stopword noise)
+        if len(word) >= 4:
+            for j in range(len(word) - 2):
+                _add_feature(f"c3:{word[j:j + 3]}", 0.25)
+
     vec = _normalize_vector(vec)
     return vec.tolist()
 
+
 async def get_text_embedding(text: str) -> List[float]:
     """
-    Returns text embedding:
-    Attempts local Ollama (bge-m3 / nomic-embed-text) first.
-    If Ollama returns a vector of different dimension, standardizes to DIMENSION (384).
-    Falls back gracefully to local deterministic vector if Ollama is not running.
+    Returns consistent 384-dim text embedding aligned with the indexed database vector space.
+    Using the unified deterministic feature-hashing space prevents cross-space mismatch
+    between query vectors and seeded database embeddings.
     """
-    if await ollama_client.is_available():
-        emb = await ollama_client.get_embedding(text)
-        if emb and len(emb) > 0:
-            return _standardize_dimension(emb, DIMENSION).tolist()
-            
     return _local_deterministic_embedding(text, DIMENSION)
 
+
 def cosine_similarity(v1: List[float], v2: List[float]) -> float:
-    """
-    Computes cosine similarity between two vector lists.
-    FIX PERF-04: fast-path vector normalization without redundant interpolation
-    when vectors are already of target DIMENSION.
-    """
+    """Computes cosine similarity between two vector lists."""
     if not v1 or not v2:
         return 0.0
     if len(v1) == DIMENSION and len(v2) == DIMENSION:

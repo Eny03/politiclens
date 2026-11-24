@@ -5,6 +5,7 @@ Strictly secured to ensure only this authorized PC / admin token can access tele
 """
 
 import datetime
+import hmac
 from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Request, Query, Header, Cookie
 from sqlalchemy.orm import Session
@@ -47,19 +48,24 @@ def is_request_authorized(request: Request, token: Optional[str] = None) -> bool
     if client_ip in ["127.0.0.1", "::1", "localhost", "testclient"]:
         return True
 
-    # Check token from parameter, header, query, or cookie
+    def _secret_matches(candidate: Optional[str]) -> bool:
+        if not candidate or not settings.ADMIN_SECRET_KEY:
+            return False
+        return hmac.compare_digest(candidate.strip(), settings.ADMIN_SECRET_KEY)
+
+    # Check token from parameter, header, query, or cookie (constant-time comparison)
     auth_header = token or request.headers.get("x-admin-token") or request.headers.get("authorization")
     if auth_header:
         cleaned_token = auth_header.replace("Bearer ", "").strip()
-        if cleaned_token == settings.ADMIN_SECRET_KEY:
+        if _secret_matches(cleaned_token):
             return True
 
     query_key = request.query_params.get("auth_key") or request.query_params.get("key")
-    if query_key and query_key.strip() == settings.ADMIN_SECRET_KEY:
+    if _secret_matches(query_key):
         return True
 
     cookie_token = request.cookies.get("admin_auth_token")
-    if cookie_token and cookie_token.strip() == settings.ADMIN_SECRET_KEY:
+    if _secret_matches(cookie_token):
         return True
 
     return False
@@ -89,7 +95,7 @@ def check_admin_verification(request: Request, data: Optional[AdminLoginRequest]
 @router.post("/login")
 def admin_login(data: AdminLoginRequest, request: Request):
     """Authenticates this PC / browser with the master admin secret key."""
-    if data.secret_key.strip() == settings.ADMIN_SECRET_KEY:
+    if hmac.compare_digest(data.secret_key.strip(), settings.ADMIN_SECRET_KEY):
         return {
             "success": True,
             "token": settings.ADMIN_SECRET_KEY,
@@ -203,6 +209,26 @@ def get_visitor_ip_list(
 
     grouped_results = group_query.group_by(VisitorLog.ip_address).order_by(desc("last_seen")).limit(limit).all()
 
+    # Batch-fetch recent records for all listed IPs in ONE query (eliminates 2N N+1 queries)
+    ips = [row.ip_address for row in grouped_results]
+    latest_by_ip: Dict[str, VisitorLog] = {}
+    recent_paths_by_ip: Dict[str, List[str]] = {ip: [] for ip in ips}
+
+    if ips:
+        recent_rows = (
+            db.query(VisitorLog)
+            .filter(VisitorLog.ip_address.in_(ips))
+            .order_by(desc(VisitorLog.timestamp))
+            .limit(max(500, len(ips) * 10))
+            .all()
+        )
+        for rec in recent_rows:
+            if rec.ip_address not in latest_by_ip:
+                latest_by_ip[rec.ip_address] = rec
+            plist = recent_paths_by_ip.setdefault(rec.ip_address, [])
+            if rec.path and rec.path not in plist and len(plist) < 6:
+                plist.append(rec.path)
+
     ip_list = []
     for row in grouped_results:
         ip = row.ip_address
@@ -210,17 +236,8 @@ def get_visitor_ip_list(
         last_seen = row.last_seen
         total_visits = row.total_visits
         is_online = (last_seen >= five_min_ago) if last_seen else False
-
-        # Get latest metadata for this IP
-        latest_record = db.query(VisitorLog).filter(
-            VisitorLog.ip_address == ip
-        ).order_by(desc(VisitorLog.timestamp)).first()
-
-        # Get distinct recent paths
-        recent_path_records = db.query(VisitorLog.path).filter(
-            VisitorLog.ip_address == ip
-        ).order_by(desc(VisitorLog.timestamp)).limit(6).all()
-        recent_paths = list(dict.fromkeys([p[0] for p in recent_path_records]))
+        latest_record = latest_by_ip.get(ip)
+        recent_paths = recent_paths_by_ip.get(ip, [])
 
         ip_list.append({
             "ip_address": ip,

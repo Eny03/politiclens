@@ -191,6 +191,16 @@ export default function SourcesPage() {
             Scansione autonoma continua 24/7 di tutto il web: agenzie di stampa (ANSA, Sole 24 Ore, Rai), canali dei partiti, atti parlamentari e fact-checking finanziario.
           </p>
         </div>
+
+        <button
+          type="button"
+          onClick={handleTriggerScan}
+          disabled={isScanning}
+          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-950 shadow-xs transition-all disabled:opacity-50 shrink-0 self-start md:self-auto"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${isScanning ? "animate-spin" : ""}`} />
+          <span>{isScanning ? "Scansione in avvio..." : "Avvia Scansione Web Ora"}</span>
+        </button>
       </div>
 
       {scanMessage && (

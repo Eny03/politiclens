@@ -24,15 +24,16 @@ def sync_audit_with_proposals(db: Session):
     proposals = db.query(PoliticalProposal).all()
     prop_id_set = {str(p.id) for p in proposals}
 
-    # Clean any orphan 'aggiunta' logs for proposals that no longer exist
-    orphan_logs = db.query(AuditLog).filter(
-        AuditLog.event_type == "aggiunta",
-        ~AuditLog.entity_id.in_(prop_id_set)
-    ).all()
-    for o in orphan_logs:
-        db.delete(o)
-    if orphan_logs:
-        db.commit()
+    # Clean any orphan numeric 'aggiunta' logs for proposals that no longer exist
+    if prop_id_set:
+        orphan_logs = db.query(AuditLog).filter(
+            AuditLog.event_type == "aggiunta",
+            ~AuditLog.entity_id.in_(prop_id_set)
+        ).all()
+        for o in orphan_logs:
+            db.delete(o)
+        if orphan_logs:
+            db.commit()
 
     existing_added_ids = {
         log[0] for log in db.query(AuditLog.entity_id).filter(AuditLog.event_type == 'aggiunta').all() if log[0]
@@ -149,15 +150,17 @@ def get_audit_logs(
 ):
     """
     Returns full institutional audit log entries with flexible filtering
-    for events, agents, parties, and keywords.
+    for events, agents, parties, and keywords (read-only fast GET).
     """
-    seed_audit_history_if_empty(db)
-    sync_audit_with_proposals(db)
-
     query = db.query(AuditLog)
 
     if event_type and event_type != "Tutti":
-        query = query.filter(AuditLog.event_type == event_type)
+        if event_type.lower() in ("sondaggi aggiornati", "poll_update", "sondaggi"):
+            query = query.filter(AuditLog.event_type.in_(["sondaggi aggiornati", "POLL_UPDATE", "POLL_SWEEP_COMPLETED"]))
+        elif event_type.lower() == "modifica":
+            query = query.filter(AuditLog.event_type.in_(["modifica", "PROPOSAL_UPDATED", "FACT_CHECK_AUDIT"]))
+        else:
+            query = query.filter(AuditLog.event_type == event_type)
 
     if agent and agent != "Tutti":
         query = query.filter(AuditLog.agent_responsible == agent)
@@ -180,11 +183,11 @@ def get_audit_logs(
     distinct_types = [r[0] for r in db.query(AuditLog.event_type).distinct().all() if r[0]]
     distinct_agents = [r[0] for r in db.query(AuditLog.agent_responsible).distinct().all() if r[0]]
 
-    # Calculate real totals across the whole database
+    # Calculate real totals across the whole database (including POLL_UPDATE and FACT_CHECK_AUDIT!)
     aggiunta_cnt = db.query(func.count(AuditLog.id)).filter(AuditLog.event_type == 'aggiunta').scalar() or 0
-    modifica_cnt = db.query(func.count(AuditLog.id)).filter(AuditLog.event_type == 'modifica').scalar() or 0
+    modifica_cnt = db.query(func.count(AuditLog.id)).filter(AuditLog.event_type.in_(['modifica', 'PROPOSAL_UPDATED', 'FACT_CHECK_AUDIT'])).scalar() or 0
     cancellazione_cnt = db.query(func.count(AuditLog.id)).filter(AuditLog.event_type == 'cancellazione').scalar() or 0
-    sondaggi_cnt = db.query(func.count(AuditLog.id)).filter(AuditLog.event_type.in_(['sondaggi aggiornati', 'POLL_SWEEP_COMPLETED'])).scalar() or 0
+    sondaggi_cnt = db.query(func.count(AuditLog.id)).filter(AuditLog.event_type.in_(['sondaggi aggiornati', 'POLL_UPDATE', 'POLL_SWEEP_COMPLETED'])).scalar() or 0
     total_ops = aggiunta_cnt + modifica_cnt + cancellazione_cnt + sondaggi_cnt
 
     stats_obj = AuditStatsSchema(

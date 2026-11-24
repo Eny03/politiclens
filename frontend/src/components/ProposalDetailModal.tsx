@@ -56,6 +56,9 @@ export function ProposalDetailModal({ proposal, isOpen, onClose }: ProposalDetai
       onClick={onClose}
     >
       <div 
+        role="dialog"
+        aria-modal="true"
+        aria-label={proposal.dichiarazione_sintesi}
         className="relative w-full max-w-2xl max-h-[90vh] bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
@@ -136,18 +139,18 @@ export function ProposalDetailModal({ proposal, isOpen, onClose }: ProposalDetai
               <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-800 space-y-1">
                 <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">Costo Stimato</span>
                 <p className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                  {proposal.costo_stimato && proposal.costo_stimato !== "Non quantificato" 
-                    ? proposal.costo_stimato 
-                    : "Invarianza sui saldi di finanza pubblica (art. 81 Cost.)"}
+                  {proposal.costo_stimato && proposal.costo_stimato.trim() !== ""
+                    ? proposal.costo_stimato
+                    : "Non quantificato dalla fonte"}
                 </p>
               </div>
 
               <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-800 space-y-1">
                 <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">Coperture Finanziarie</span>
                 <p className="text-sm font-medium text-slate-800 dark:text-slate-200">
-                  {proposal.coperture_dichiarate && !proposal.coperture_dichiarate.toLowerCase().includes("non specificat")
-                    ? proposal.coperture_dichiarate 
-                    : "Fondi ordinari di bilancio e clausola di neutralità ex art. 81 Cost."}
+                  {proposal.coperture_dichiarate && proposal.coperture_dichiarate.trim() !== ""
+                    ? proposal.coperture_dichiarate
+                    : "Non specificate dalla fonte"}
                 </p>
               </div>
             </div>
@@ -184,17 +187,23 @@ export function ProposalDetailModal({ proposal, isOpen, onClose }: ProposalDetai
             )}
 
             {proposal.fact_check_fonte && (
-              <div className="pt-2 border-t border-slate-200/60 dark:border-slate-700/60 flex items-center justify-between text-xs">
-                <span className="text-slate-500 text-[11px]">Fonte del dato ufficiale:</span>
-                <a
-                  href={proposal.fact_check_fonte}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:underline font-semibold"
-                >
-                  <span>Consulta Benchmark Ufficiale</span>
-                  <ExternalLink className="w-3.5 h-3.5" />
-                </a>
+              <div className="pt-2 border-t border-slate-200/60 dark:border-slate-700/60 flex items-center justify-between text-xs gap-2">
+                <span className="text-slate-500 text-[11px] shrink-0">Fonte del dato ufficiale:</span>
+                {/^https?:\/\//i.test(proposal.fact_check_fonte.trim()) ? (
+                  <a
+                    href={proposal.fact_check_fonte}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:underline font-semibold"
+                  >
+                    <span>Consulta Benchmark Ufficiale</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                ) : (
+                  <span className="text-slate-700 dark:text-slate-300 font-medium text-right">
+                    {proposal.fact_check_fonte}
+                  </span>
+                )}
               </div>
             )}
           </div>
@@ -212,15 +221,17 @@ export function ProposalDetailModal({ proposal, isOpen, onClose }: ProposalDetai
             </span>
           </div>
 
-          <a
-            href={proposal.fonte_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-950 transition-all shadow-xs"
-          >
-            <span>Apri Fonte Web Originale</span>
-            <ExternalLink className="w-3.5 h-3.5" />
-          </a>
+          {proposal.fonte_url && /^https?:\/\//i.test(proposal.fonte_url.trim()) && (
+            <a
+              href={proposal.fonte_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-950 transition-all shadow-xs"
+            >
+              <span>Apri Fonte Web Originale</span>
+              <ExternalLink className="w-3.5 h-3.5" />
+            </a>
+          )}
         </div>
       </div>
     </div>

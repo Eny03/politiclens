@@ -58,37 +58,37 @@ def get_overview_stats(db: Session = Depends(get_db)):
     ]
     avg_truthfulness = round(sum(all_truth_scores) / total_proposals, 1) if total_proposals > 0 else 0.0
 
-    # Coalition truthfulness breakdown
+    # Coalition truthfulness breakdown (in-memory O(N) grouping, read-only GET — no N+1 queries or DB writes!)
     parties = db.query(PoliticalParty).all()
+    props_by_pid: Dict[int, list] = {}
+    props_by_name: Dict[str, list] = {}
+    for pr in all_proposals:
+        if pr.party_id is not None:
+            props_by_pid.setdefault(pr.party_id, []).append(pr)
+        props_by_name.setdefault(pr.partito, []).append(pr)
+
     coalition_map: Dict[str, List[float]] = {}
     party_rankings = []
 
     for p in parties:
-        p_props = db.query(PoliticalProposal).filter(
-            (PoliticalProposal.party_id == p.id) | (PoliticalProposal.partito.ilike(f"%{p.name}%"))
-        ).all()
+        p_props = props_by_pid.get(p.id) or props_by_name.get(p.name, [])
         p_total = len(p_props)
         if p_total > 0:
             p_truth = round(sum(calculate_proposal_truthfulness_score(pr.fact_check_status, getattr(pr, "truth_score", None)) for pr in p_props) / p_total, 1)
             p_fin = round(sum(calculate_financial_coverage_percentage(pr.costo_stimato, pr.coperture_dichiarate, pr.dichiarazione_sintesi) for pr in p_props) / p_total, 1)
-            # Dynamically sync party record with current proposal scores
-            p.truthfulness_score = p_truth
-            p.financial_reliability_score = p_fin
         else:
             p_truth = p.truthfulness_score or 75.0
             p_fin = p.financial_reliability_score or 70.0
         
-        c_name = p.coalition
+        c_name = p.coalition or ""
         if "Centrodestra" in c_name:
             c_key = "Centrodestra (Maggioranza)"
-        elif "Centrosinistra" in c_name or "Progressista" in c_name:
+        elif "Centrosinistra" in c_name or "Progressista" in c_name or "Opposizione" in c_name:
             c_key = "Centrosinistra & Campo Largo"
-        elif "Movimento 5 Stelle" in c_name:
-            c_key = "Movimento 5 Stelle"
-        elif "Liberaldemocratici" in c_name or "Centro" in c_name:
+        elif "Liberaldemocratici" in c_name or "Riformist" in c_name or "Centro Riformatore" in c_name or "Popolari Europei" in c_name:
             c_key = "Centro & Liberaldemocratici"
         else:
-            c_key = "Sinistra Radicale & Altre Forze"
+            c_key = "Altre Forze, Sovranisti & Autonomie"
 
         coalition_map.setdefault(c_key, []).append(p_truth)
 
@@ -107,12 +107,6 @@ def get_overview_stats(db: Session = Depends(get_db)):
             "financial_reliability_score": p_fin,
             "proposals_count": p_total
         })
-
-    # Persist updated party scores if any changed
-    try:
-        db.commit()
-    except Exception:
-        db.rollback()
 
     # Sort party rankings by poll percentage descending
     party_rankings.sort(key=lambda x: x["poll_percentage"], reverse=True)
